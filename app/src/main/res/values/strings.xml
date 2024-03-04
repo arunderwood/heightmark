@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">HeightMark</string>
+    <string name="elevation_text">Elevation: %1$.2f meters</string>
+</resources>
