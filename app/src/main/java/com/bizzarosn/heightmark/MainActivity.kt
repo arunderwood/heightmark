@@ -11,7 +11,6 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
-import android.widget.TextView
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,6 +18,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
     }
+
+    private lateinit var elevationTextView: ElevationTextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,12 +31,12 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        val elevationTextView: TextView = findViewById(R.id.elevation_text_view)
-        elevationTextView.text = getString(R.string.loading_elevation)
+        elevationTextView = findViewById(R.id.elevation_text_view)
 
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
         } else {
+            elevationTextView.startLoadingAnimation()
             getCurrentElevation()
         }
     }
@@ -66,8 +67,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUIWithElevation(elevation: Double) {
-        val elevationTextView: TextView = findViewById(R.id.elevation_text_view)
-        elevationTextView.text = getString(R.string.elevation_text, elevation)
+        elevationTextView.updateElevation(elevation)
     }
 
 
