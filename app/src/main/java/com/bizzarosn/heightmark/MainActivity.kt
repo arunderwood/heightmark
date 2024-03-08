@@ -30,6 +30,9 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        val elevationTextView: TextView = findViewById(R.id.elevation_text_view)
+        elevationTextView.text = getString(R.string.loading_elevation)
+
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
         } else {
