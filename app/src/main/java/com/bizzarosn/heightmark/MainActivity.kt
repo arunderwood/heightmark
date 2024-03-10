@@ -17,9 +17,11 @@ class MainActivity : AppCompatActivity() {
     // Inside MainActivity class
     companion object {
         private const val LOCATION_PERMISSION_REQUEST_CODE = 1
+        private const val ELEVATION_READINGS_COUNT = 10
     }
 
     private lateinit var elevationTextView: ElevationTextView
+    private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +55,8 @@ class MainActivity : AppCompatActivity() {
         val locationListener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 val elevation = location.altitude // Elevation in meters
-                updateUIWithElevation(elevation)
+                val averageElevation = elevationService.addElevationReading(elevation)
+                updateUIWithElevation(averageElevation)
             }
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}

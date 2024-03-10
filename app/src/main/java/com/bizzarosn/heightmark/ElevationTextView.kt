@@ -3,8 +3,6 @@ package com.bizzarosn.heightmark
 import android.animation.ValueAnimator
 import android.content.Context
 import android.util.AttributeSet
-import android.widget.TextView
-import com.bizzarosn.heightmark.R
 
 class ElevationTextView @JvmOverloads constructor(
     context: Context,
@@ -32,14 +30,14 @@ class ElevationTextView @JvmOverloads constructor(
         loadingAnimator?.start()
     }
 
-    fun stopLoadingAnimation() {
+    private fun stopLoadingAnimation() {
         loadingAnimator?.cancel()
         alpha = 1f
     }
 
     fun updateElevation(elevation: Double) {
         stopLoadingAnimation()
-        val elevationFloat = elevation.toFloat()
-        text = context.getString(R.string.elevation_text, elevationFloat)
+        val elevationRounded = kotlin.math.round(elevation).toInt()
+        text = context.getString(R.string.elevation_text, elevationRounded)
     }
 }
