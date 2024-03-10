@@ -35,9 +35,11 @@ class ElevationTextView @JvmOverloads constructor(
         alpha = 1f
     }
 
-    fun updateElevation(elevation: Double) {
+    fun updateElevation(elevation: Double, useMetric: Boolean) {
         stopLoadingAnimation()
-        val elevationRounded = kotlin.math.round(elevation).toInt()
-        text = context.getString(R.string.elevation_text, elevationRounded)
+        val localizedElevation = if (useMetric) elevation else elevation * 3.281 // Convert meters to feet
+        val elevationRounded = kotlin.math.round(localizedElevation).toInt()
+        val unit = if (useMetric) "meters" else "feet"
+        text = context.getString(R.string.elevation_text, elevationRounded, unit)
     }
 }
