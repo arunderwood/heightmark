@@ -11,6 +11,9 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -20,12 +23,15 @@ class MainActivity : AppCompatActivity() {
         private const val ELEVATION_READINGS_COUNT = 10
     }
 
+    private lateinit var preferencesRepository: PreferencesRepository
     private lateinit var elevationTextView: ElevationTextView
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        preferencesRepository = PreferencesRepository(this)
+
         setContentView(R.layout.activity_main)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -70,7 +76,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateUIWithElevation(elevation: Double) {
-        elevationTextView.updateElevation(elevation)
+        lifecycleScope.launch {
+            val useMetric = preferencesRepository.useMetricUnit.first()
+            elevationTextView.updateElevation(elevation, useMetric)
+        }
     }
 
 
