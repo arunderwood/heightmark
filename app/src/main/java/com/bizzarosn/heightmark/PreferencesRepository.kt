@@ -13,10 +13,20 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 private object PreferencesKeys {
     val USE_METRIC_UNIT = booleanPreferencesKey("use_metric_unit")
 }
+import androidx.datastore.preferences.core.edit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
 class PreferencesRepository(context: Context) {
     private val dataStore = context.dataStore
 
     val useMetricUnit: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[PreferencesKeys.USE_METRIC_UNIT] ?: true
+    }
+
+    suspend fun setUseMetricUnit(useMetric: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_METRIC_UNIT] = useMetric
+        }
     }
 }

@@ -21,7 +21,7 @@
 
     <LinearLayout
         android:layout_width="409dp"
-        android:layout_height="149dp"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="94dp"
         android:orientation="vertical"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -36,5 +36,13 @@
             android:gravity="center"
             android:text="@string/elevation_text"
             android:textSize="24sp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/unit_switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginTop="16dp"
+            android:text="@string/use_metric_units" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
