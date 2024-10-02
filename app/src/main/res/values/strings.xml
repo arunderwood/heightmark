@@ -4,4 +4,5 @@
     <string name="loading_elevation">Fetching elevation…</string>
     <string name="background">background</string>
     <string name="elevation">Elevation</string>
+    <string name="use_metric_units">Use Metric Units</string>
 </resources>
