@@ -102,7 +102,6 @@ class ElevationFragment : Fragment() {
         } else {
             elevation * 3.28084 // Convert meters to feet
         }
-        val unit = if (useMetricUnit) "m" else "ft"
-        elevationTextView.updateElevation(displayElevation, useMetricUnit, unit)
+        elevationTextView.updateElevation(displayElevation, useMetricUnit)
     }
 }
