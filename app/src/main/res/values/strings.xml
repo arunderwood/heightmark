@@ -1,7 +1,8 @@
 <resources>
     <string name="app_name">HeightMark</string>
-    <string name="elevation_text">Elevation: %1$d meters</string>
+    <string name="elevation_text">Elevation: %1$d %2$s</string>
     <string name="loading_elevation">Fetching elevation…</string>
     <string name="background">background</string>
     <string name="elevation">Elevation</string>
+    <string name="use_metric_units">Use Metric Units</string>
 </resources>
