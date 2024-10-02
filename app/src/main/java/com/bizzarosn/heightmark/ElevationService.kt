@@ -15,7 +15,8 @@ class ElevationService(private val readingsCount: Int) {
         return elevationReadings.average()
     }
 
-    fun getConvertedElevation(elevation: Double, useMetric: Boolean): Double {
-        return if (useMetric) elevation else elevation * 3.28084 // Convert meters to feet
+    fun getLocalizedElevation(useMetric: Boolean): Double {
+        val averageElevation = getAverageElevation()
+        return if (useMetric) averageElevation else averageElevation * 3.28084 // Convert meters to feet
     }
 }

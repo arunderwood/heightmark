@@ -81,9 +81,8 @@ class ElevationFragment : Fragment() {
         val locationListener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 val elevation = location.altitude // Elevation in meters
-                val averageElevation = elevationService.addElevationReading(elevation)
-                lastKnownElevation = averageElevation
-                updateUIWithElevation(averageElevation)
+                elevationService.addElevationReading(elevation)
+                updateUIWithElevation()
             }
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
@@ -96,8 +95,8 @@ class ElevationFragment : Fragment() {
         }
     }
 
-    private fun updateUIWithElevation(elevation: Double) {
-        val displayElevation = elevationService.getConvertedElevation(elevation, useMetricUnit)
-        elevationTextView.updateElevation(displayElevation, useMetricUnit)
+    private fun updateUIWithElevation() {
+        val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
+        elevationTextView.updateElevation(localizedElevation, useMetricUnit)
     }
 }
