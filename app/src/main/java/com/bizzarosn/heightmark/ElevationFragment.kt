@@ -97,11 +97,7 @@ class ElevationFragment : Fragment() {
     }
 
     private fun updateUIWithElevation(elevation: Double) {
-        val displayElevation = if (useMetricUnit) {
-            elevation
-        } else {
-            elevation * 3.28084 // Convert meters to feet
-        }
+        val displayElevation = elevationService.getConvertedElevation(elevation, useMetricUnit)
         elevationTextView.updateElevation(displayElevation, useMetricUnit)
     }
 }

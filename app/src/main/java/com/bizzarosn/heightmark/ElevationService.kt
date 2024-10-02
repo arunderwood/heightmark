@@ -14,4 +14,8 @@ class ElevationService(private val readingsCount: Int) {
     private fun getAverageElevation(): Double {
         return elevationReadings.average()
     }
+
+    fun getConvertedElevation(elevation: Double, useMetric: Boolean): Double {
+        return if (useMetric) elevation else elevation * 3.28084 // Convert meters to feet
+    }
 }
