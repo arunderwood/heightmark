@@ -30,6 +30,7 @@ class ElevationFragment : Fragment() {
     private lateinit var elevationTextView: ElevationTextView
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
     private var useMetricUnit = true
+    private var lastKnownElevation: Double = 0.0
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -61,7 +62,7 @@ class ElevationFragment : Fragment() {
             useMetricUnit = isChecked
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(isChecked)
-                updateUIWithElevation(elevationService.getLastElevation())
+                updateUIWithElevation(lastKnownElevation)
             }
         }
 
@@ -81,6 +82,7 @@ class ElevationFragment : Fragment() {
             override fun onLocationChanged(location: Location) {
                 val elevation = location.altitude // Elevation in meters
                 val averageElevation = elevationService.addElevationReading(elevation)
+                lastKnownElevation = averageElevation
                 updateUIWithElevation(averageElevation)
             }
             @Deprecated("Deprecated in Java")
