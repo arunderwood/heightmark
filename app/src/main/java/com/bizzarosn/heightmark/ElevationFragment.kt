@@ -81,7 +81,7 @@ class ElevationFragment : Fragment() {
         val locationListener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 val elevation = location.altitude // Elevation in meters
-                elevationService.addElevationReading(elevation)
+                lastKnownElevation = elevationService.addElevationReading(elevation)
                 updateUIWithElevation()
             }
             @Deprecated("Deprecated in Java")
