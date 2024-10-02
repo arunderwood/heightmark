@@ -40,7 +40,7 @@ class ElevationFragment : Fragment() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
-        preferencesRepository = PreferencesRepository(requireContext())
+        preferencesRepository = PreferencesRepository(requireContext().applicationContext)
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         val unitSwitch = view.findViewById<SwitchCompat>(R.id.unit_switch)
