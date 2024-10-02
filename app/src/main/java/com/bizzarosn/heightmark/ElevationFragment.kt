@@ -22,6 +22,7 @@ class ElevationFragment : Fragment() {
         private const val ELEVATION_READINGS_COUNT = 10
     }
 
+    private lateinit var preferencesRepository: PreferencesRepository
     private lateinit var elevationTextView: ElevationTextView
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
 
@@ -35,6 +36,7 @@ class ElevationFragment : Fragment() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+        preferencesRepository = PreferencesRepository(this)
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
 
@@ -75,6 +77,6 @@ class ElevationFragment : Fragment() {
     }
 
     private fun updateUIWithElevation(elevation: Double) {
-        elevationTextView.updateElevation(elevation)
+        elevationTextView.updateElevation(elevation, false)
     }
 }
