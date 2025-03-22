@@ -19,7 +19,7 @@ class PreferencesRepository(context: Context) {
     private val dataStore = context.dataStore
 
     val useMetricUnit: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PreferencesKeys.USE_METRIC_UNIT] ?: true
+        preferences[PreferencesKeys.USE_METRIC_UNIT] != false
     }
 
     suspend fun setUseMetricUnit(useMetric: Boolean) {
