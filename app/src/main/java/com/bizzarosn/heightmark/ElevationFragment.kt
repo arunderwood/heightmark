@@ -10,8 +10,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
-import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -22,7 +24,6 @@ import kotlinx.coroutines.launch
 class ElevationFragment : Fragment() {
 
     companion object {
-        private const val LOCATION_PERMISSION_REQUEST_CODE = 1
         private const val ELEVATION_READINGS_COUNT = 10
     }
 
@@ -31,9 +32,26 @@ class ElevationFragment : Fragment() {
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
     private var useMetricUnit = true
 
+    private lateinit var locationPermissionLauncher: ActivityResultLauncher<String>
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Initialize the permission launcher
+        locationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { isGranted ->
+            if (isGranted) {
+                elevationTextView.startLoadingAnimation()
+                getCurrentElevation()
+            } else {
+                // Handle permission denied case
+            }
+        }
+    }
+
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_elevation, container, false)
         ViewCompat.setOnApplyWindowInsetsListener(view.findViewById(R.id.main)) { v, insets ->
@@ -49,12 +67,7 @@ class ElevationFragment : Fragment() {
         lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
             unitSwitch.isChecked = useMetricUnit
-            if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(requireActivity(), arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), LOCATION_PERMISSION_REQUEST_CODE)
-            } else {
-                elevationTextView.startLoadingAnimation()
-                getCurrentElevation()
-            }
+            checkLocationPermission()
         }
 
         unitSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -62,16 +75,25 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(isChecked)
                 updateUIWithElevation()
+                checkLocationPermission()
             }
         }
 
         return view
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            getCurrentElevation()
+    private fun checkLocationPermission() {
+        when {
+            ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED -> {
+                elevationTextView.startLoadingAnimation()
+                getCurrentElevation()
+            }
+
+            else -> {
+                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            }
         }
     }
 
@@ -83,14 +105,22 @@ class ElevationFragment : Fragment() {
                 elevationService.addElevationReading(elevation)
                 updateUIWithElevation()
             }
+
             @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+            }
+
             override fun onProviderEnabled(provider: String) {}
             override fun onProviderDisabled(provider: String) {}
         }
 
-        if (ActivityCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0f, locationListener)
+        if (ContextCompat.checkSelfPermission(
+                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            locationManager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER, 0, 0f, locationListener
+            )
         }
     }
 
