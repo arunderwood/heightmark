@@ -2,7 +2,6 @@ package com.bizzarosn.heightmark
 
 import android.Manifest
 import android.content.Context.LOCATION_SERVICE
-import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -10,10 +9,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresPermission
 import androidx.appcompat.widget.SwitchCompat
-import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -32,23 +29,18 @@ class ElevationFragment : Fragment() {
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
     private var useMetricUnit = true
 
-    private lateinit var locationPermissionLauncher: ActivityResultLauncher<String>
+    private lateinit var permissionHandler: LocationPermissionHandler
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize the permission launcher
-        locationPermissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { isGranted ->
-            if (isGranted) {
-                elevationTextView.startLoadingAnimation()
-                getCurrentElevation()
-            } else {
-                // Handle permission denied case
-            }
+        permissionHandler = LocationPermissionHandler(this) {
+            elevationTextView.startLoadingAnimation()
+            getCurrentElevation()
         }
+        permissionHandler.initialize()
     }
+
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
@@ -67,7 +59,7 @@ class ElevationFragment : Fragment() {
         lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
             unitSwitch.isChecked = useMetricUnit
-            checkLocationPermission()
+            permissionHandler.checkPermission()
         }
 
         unitSwitch.setOnCheckedChangeListener { _, isChecked ->
@@ -75,28 +67,14 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(isChecked)
                 updateUIWithElevation()
-                checkLocationPermission()
+                permissionHandler.checkPermission()
             }
         }
 
         return view
     }
 
-    private fun checkLocationPermission() {
-        when {
-            ContextCompat.checkSelfPermission(
-                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                elevationTextView.startLoadingAnimation()
-                getCurrentElevation()
-            }
-
-            else -> {
-                locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-            }
-        }
-    }
-
+    @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     private fun getCurrentElevation() {
         val locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
         val locationListener = object : LocationListener {
@@ -113,15 +91,9 @@ class ElevationFragment : Fragment() {
             override fun onProviderEnabled(provider: String) {}
             override fun onProviderDisabled(provider: String) {}
         }
-
-        if (ContextCompat.checkSelfPermission(
-                requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER, 0, 0f, locationListener
-            )
-        }
+        locationManager.requestLocationUpdates(
+            LocationManager.GPS_PROVIDER, 0, 0f, locationListener
+        )
     }
 
     private fun updateUIWithElevation() {
