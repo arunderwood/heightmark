@@ -5,4 +5,10 @@
     <string name="background">background</string>
     <string name="elevation">Elevation</string>
     <string name="use_metric_units">Use Metric Units</string>
+    <string name="location_permission_required">Location Permission Required</string>
+    <string name="this_app_needs_location_permission_to_determine_your_elevation_without_this_permission_the_app_cannot_function">This app needs location permission to determine your elevation. Without this permission, the app cannot function.</string>
+    <string name="grant_permission">Grant Permission</string>
+    <string name="exit_app">Exit App</string>
+    <string name="permission_permanently_denied_message">This app needs location permission to determine your elevation. Please open settings and enable location permission manually.</string>
+    <string name="open_settings">Open Settings</string>
 </resources>
