@@ -39,6 +39,7 @@ class ElevationFragment : Fragment() {
         permissionHandler = LocationPermissionHandler(this) {
             elevationTextView.startLoadingAnimation()
             if (hasLocationPermission()) {
+                @Suppress("MissingPermission")
                 getCurrentElevation()
             }
         }
@@ -81,7 +82,6 @@ class ElevationFragment : Fragment() {
     }
 
     @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    @Suppress("MissingPermission")
     private fun getCurrentElevation() {
         val locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
         val locationListener = object : LocationListener {
