@@ -71,7 +71,9 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(isChecked)
                 updateUIWithElevation()
-                permissionHandler.checkPermission()
+                if (hasLocationPermission()) {
+                    permissionHandler.checkPermission()
+                }
             }
         }
 
@@ -79,6 +81,7 @@ class ElevationFragment : Fragment() {
     }
 
     @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
+    @Suppress("MissingPermission")
     private fun getCurrentElevation() {
         val locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
         val locationListener = object : LocationListener {
