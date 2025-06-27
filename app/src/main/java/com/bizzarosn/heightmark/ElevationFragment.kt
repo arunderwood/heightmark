@@ -2,6 +2,7 @@ package com.bizzarosn.heightmark
 
 import android.Manifest
 import android.content.Context.LOCATION_SERVICE
+import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -11,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.RequiresPermission
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -36,7 +38,9 @@ class ElevationFragment : Fragment() {
 
         permissionHandler = LocationPermissionHandler(this) {
             elevationTextView.startLoadingAnimation()
-            getCurrentElevation()
+            if (hasLocationPermission()) {
+                getCurrentElevation()
+            }
         }
         permissionHandler.initialize()
     }
@@ -94,6 +98,13 @@ class ElevationFragment : Fragment() {
         locationManager.requestLocationUpdates(
             LocationManager.GPS_PROVIDER, 0, 0f, locationListener
         )
+    }
+
+    private fun hasLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun updateUIWithElevation() {
