@@ -30,18 +30,16 @@ class ElevationFragment : Fragment() {
     private lateinit var elevationTextView: ElevationTextView
     private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
     private var useMetricUnit = true
+    private var locationManager: LocationManager? = null
+    private var locationListener: LocationListener? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        permissionHandler = LocationPermissionHandler(this) {
-            elevationTextView.startLoadingAnimation()
-            if (hasLocationPermission()) {
-                @Suppress("MissingPermission")
-                getCurrentElevation()
-            }
+        permissionHandler = LocationPermissionHandler(this) { state ->
+            handlePermissionStateChange(state)
         }
         permissionHandler.initialize()
     }
@@ -72,46 +70,123 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(isChecked)
                 updateUIWithElevation()
-                if (hasLocationPermission()) {
-                    permissionHandler.checkPermission()
-                }
             }
         }
 
         return view
     }
 
-    @RequiresPermission(anyOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
-    private fun getCurrentElevation() {
-        val locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
-        val locationListener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                val elevation = location.altitude // Elevation in meters
-                elevationService.addElevationReading(elevation)
-                updateUIWithElevation()
+    private fun handlePermissionStateChange(state: LocationPermissionState) {
+        when (state) {
+            is LocationPermissionState.Granted -> {
+                if (hasLocationPermission()) {
+                    startLocationUpdates()
+                } else {
+                    // This shouldn't happen, but handle gracefully
+                    elevationTextView.text = getString(R.string.location_permission_required)
+                }
             }
-
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+            is LocationPermissionState.Denied,
+            is LocationPermissionState.PermanentlyDenied -> {
+                stopLocationUpdates()
+                elevationTextView.text = getString(R.string.location_permission_required)
             }
-
-            override fun onProviderEnabled(provider: String) {}
-            override fun onProviderDisabled(provider: String) {}
+            is LocationPermissionState.RequiresRationale -> {
+                stopLocationUpdates()
+                elevationTextView.text = getString(R.string.location_permission_required)
+            }
         }
-        locationManager.requestLocationUpdates(
-            LocationManager.GPS_PROVIDER, 0, 0f, locationListener
-        )
     }
-
+    
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             requireContext(),
             Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
+    }
+    
+    private fun startLocationUpdates() {
+        // Double-check permissions before starting location updates
+        if (!hasLocationPermission()) {
+            elevationTextView.text = getString(R.string.location_permission_required)
+            return
+        }
+        
+        if (locationManager == null) {
+            locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
+        }
+        
+        if (locationListener == null) {
+            locationListener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    val elevation = location.altitude
+                    elevationService.addElevationReading(elevation)
+                    updateUIWithElevation()
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
+            }
+        }
+        
+        elevationTextView.startLoadingAnimation()
+        
+        locationManager?.let { manager ->
+            locationListener?.let { listener ->
+                try {
+                    if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                        manager.requestLocationUpdates(
+                            LocationManager.GPS_PROVIDER, 1000, 1f, listener
+                        )
+                    } else if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                        manager.requestLocationUpdates(
+                            LocationManager.NETWORK_PROVIDER, 1000, 1f, listener
+                        )
+                    }
+                } catch (e: SecurityException) {
+                    // This shouldn't happen since we checked permissions, but handle gracefully
+                    elevationTextView.text = getString(R.string.location_permission_required)
+                }
+            }
+        }
+    }
+    
+    private fun stopLocationUpdates() {
+        locationManager?.let { manager ->
+            locationListener?.let { listener ->
+                manager.removeUpdates(listener)
+            }
+        }
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        stopLocationUpdates()
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        if (hasLocationPermission()) {
+            startLocationUpdates()
+        }
     }
 
     private fun updateUIWithElevation() {
         val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
         elevationTextView.updateElevation(localizedElevation, useMetricUnit)
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        stopLocationUpdates()
+        locationManager = null
+        locationListener = null
     }
 }
