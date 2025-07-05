@@ -59,9 +59,41 @@ The app uses a sophisticated permission handling system:
 
 ## Testing
 
-The project includes basic test structure:
-- Unit tests: `app/src/test/java/com/bizzarosn/heightmark/`
-- Instrumented tests: `app/src/androidTest/java/com/bizzarosn/heightmark/`
+The project includes comprehensive testing strategy:
+
+### Unit Tests (`app/src/test/`)
+- Basic logic testing
+- ElevationService unit conversion tests
+- Business logic validation
+
+### Instrumented Tests (`app/src/androidTest/`)
+- **ElevationFragmentTest**: UI interactions and component integration
+- **LocationPermissionTest**: Permission flow testing with different scenarios
+- **StartupCrashTest**: Crash detection and component initialization validation
+
+### Test Commands
+```bash
+# Run unit tests only
+./gradlew test
+
+# Run instrumented tests (requires device/emulator)
+./gradlew connectedAndroidTest
+
+# Run all tests
+./gradlew build
+```
+
+### CI Testing
+GitHub Actions runs both unit and instrumented tests:
+- **build** job: Unit tests and compilation
+- **instrumented-tests** job: Full integration tests on Android emulator
+
+**Key Testing Areas:**
+- Startup crash detection
+- Permission flow validation (no permissions, fine only, coarse only, both)
+- UI component initialization
+- Fragment lifecycle management
+- Component integration testing
 
 ## Key Features
 
