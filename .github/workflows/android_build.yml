@@ -57,17 +57,6 @@ jobs:
         with:
           gradle-home-cache-cleanup: true
           cache-read-only: false
-          
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android/sdk
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/build.gradle.kts') }}
-          restore-keys: |
-            android-sdk-${{ runner.os }}-
             
       - name: Make gradlew executable
         run: chmod +x ./gradlew
