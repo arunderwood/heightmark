@@ -73,15 +73,21 @@ The project includes comprehensive testing strategy:
 
 ### Test Commands
 ```bash
-# Run unit tests only
+# Run unit tests only (fast)
 ./gradlew test
 
 # Run instrumented tests (requires device/emulator)
 ./gradlew connectedAndroidTest
 
-# Run all tests
+# Run all tests (unit + build + lint)
 ./gradlew build
 ```
+
+### Test Dependencies
+- `androidx.test.rules`: For permission testing rules
+- `androidx.test.runner`: For instrumented test runner
+- `androidx.test.espresso.core`: For UI testing
+- `androidx.test.ext.junit`: For JUnit extensions
 
 ### CI Testing
 GitHub Actions runs both unit and instrumented tests:
