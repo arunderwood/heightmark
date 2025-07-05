@@ -90,16 +90,27 @@ The project includes comprehensive testing strategy:
 - `androidx.test.ext.junit`: For JUnit extensions
 
 ### CI Testing
-GitHub Actions runs both unit and instrumented tests:
-- **build** job: Unit tests and compilation
-- **instrumented-tests** job: Full integration tests on Android emulator
+GitHub Actions runs comprehensive quality checks with optimized job dependencies:
 
-**Key Testing Areas:**
-- Startup crash detection
-- Permission flow validation (no permissions, fine only, coarse only, both)
-- UI component initialization
-- Fragment lifecycle management
-- Component integration testing
+**Job Pipeline:**
+1. **setup**: Shared environment setup and dependency caching
+2. **lint**: Code analysis and lint checking (parallel with security)
+3. **security**: Trivy vulnerability scanning (parallel with lint)
+4. **build**: Unit tests and APK building (depends on setup + lint)
+5. **instrumented-tests**: Integration tests on Android emulator (depends on setup + build)
+
+**Quality Gates:**
+- Android lint checking with report uploads
+- Security vulnerability scanning with SARIF results
+- Unit test execution with coverage reports
+- Instrumented test validation on Android emulator
+
+**Optimizations:**
+- Shared setup job eliminates redundant JDK/Gradle configuration
+- Advanced caching: Gradle build cache + Android SDK cache
+- Job dependencies prevent unnecessary test runs on failed builds
+- Parallel execution of lint and security scanning
+- APK artifacts uploaded for manual testing
 
 ## Key Features
 
