@@ -120,6 +120,36 @@ GitHub Actions runs comprehensive quality checks with optimized job dependencies
 - ~30% faster emulator startup through optimized AVD caching
 - Immediate security scanning without waiting for setup
 
+### GitHub Workflow Testing
+
+**Always validate workflow changes using `act` before committing:**
+
+```bash
+# Install act (if not already installed)
+brew install act
+
+# List available workflows and jobs
+act --list
+
+# Test specific job (dry run)
+act push -j build-and-test --container-architecture linux/amd64 --dryrun
+
+# Full local test run (requires Docker)
+act push -j build-and-test --container-architecture linux/amd64
+
+# Test with environment variables
+act push -j build-and-test --env GITHUB_TOKEN=fake_token --artifact-server-path /tmp/artifacts
+```
+
+**Validation steps to perform:**
+1. **YAML syntax validation**: Ensure workflow file parses correctly
+2. **Job configuration**: Verify jobs, steps, and dependencies are properly defined
+3. **Action references**: Confirm community actions exist and versions are correct
+4. **File paths**: Validate that expected artifacts (test results, lint reports) are generated
+5. **Permissions**: Ensure required permissions are granted for actions to function
+
+**Note**: Use `--container-architecture linux/amd64` on Apple M-series chips to avoid compatibility issues.
+
 ## Key Features
 
 - Real-time elevation display using GPS
