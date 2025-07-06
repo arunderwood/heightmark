@@ -52,7 +52,6 @@ jobs:
           track: internal  # Options: internal, alpha, beta, production
           status: completed
           inAppUpdatePriority: 2
-          userFraction: 0.33
           whatsNewDirectory: metadata/whatsnew
           
       - name: Upload release artifacts
