@@ -81,7 +81,7 @@ jobs:
             app/build/test-results/testDebugUnitTest/TEST-*.xml
             app/build/test-results/testReleaseUnitTest/TEST-*.xml
           check_name: Unit Test Results
-          comment_mode: create new
+          comment_mode: always
           
       - name: Report Android Lint Results
         uses: yutailang0119/action-android-lint@v1
