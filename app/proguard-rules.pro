@@ -14,8 +14,19 @@
 
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keepattributes SourceFile,LineNumberTable
 
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
-#-renamesourcefileattribute SourceFile
+-renamesourcefileattribute SourceFile
+
+# Keep crash reporting attributes
+-keepattributes Exceptions,InnerClasses,Signature,Deprecated,SourceFile,LineNumberTable,*Annotation*,EnclosingMethod
+
+# Keep all classes that might be referenced by navigation component
+-keep class androidx.navigation.** { *; }
+-keep class com.bizzarosn.heightmark.** { *; }
+
+# Keep location and sensor related classes
+-keep class android.location.** { *; }
+-keep class android.hardware.** { *; }

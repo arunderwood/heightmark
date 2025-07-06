@@ -11,7 +11,7 @@ android {
         applicationId = "com.bizzarosn.heightmark"
         minSdk = 35
         targetSdk = 35
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -36,11 +36,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Generate debug symbols for native code
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             // Only use signing config if all environment variables are available
             val hasSigningConfig = System.getenv("KEYSTORE_FILE") != null && 
                                  System.getenv("KEYSTORE_PASSWORD") != null && 
@@ -48,6 +53,15 @@ android {
                                  System.getenv("KEY_PASSWORD") != null
             if (hasSigningConfig) {
                 signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            ndk {
+                debugSymbolLevel = "FULL"
             }
         }
     }
