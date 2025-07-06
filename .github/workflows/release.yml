@@ -37,11 +37,11 @@ jobs:
         
       - name: Decode keystore
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
           
       - name: Setup signing environment
         run: |
-          echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_FILE=app/release.keystore" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
@@ -55,7 +55,7 @@ jobs:
           ./gradlew bundleRelease --parallel --build-cache
           
       - name: Clean up keystore
-        run: rm -f release.keystore
+        run: rm -f app/release.keystore
           
       - name: Upload AAB to Play Store
         uses: r0adkll/upload-google-play@v1.1.3
