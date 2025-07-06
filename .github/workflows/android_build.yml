@@ -55,10 +55,7 @@ jobs:
           distribution: 'temurin'
           
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-home-cache-cleanup: true
-          cache-read-only: false
+        uses: gradle/actions/setup-gradle@v3
             
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -111,10 +108,7 @@ jobs:
           distribution: 'temurin'
           
       - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-        with:
-          gradle-home-cache-cleanup: true
-          cache-read-only: true
+        uses: gradle/actions/setup-gradle@v3
           
       - name: Make gradlew executable
         run: chmod +x ./gradlew
