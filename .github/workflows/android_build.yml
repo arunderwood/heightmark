@@ -9,6 +9,8 @@ on:
 permissions:
   contents: read
   security-events: write
+  checks: write
+  pull-requests: write
 
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false
@@ -71,19 +73,21 @@ jobs:
           ./gradlew lintDebug testDebugUnitTest assembleDebug --parallel --build-cache
           echo "apk-path=app/build/outputs/apk/debug/*.apk" >> $GITHUB_OUTPUT
         
-      - name: Upload lint reports
-        uses: actions/upload-artifact@v4
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:
-          name: lint-reports
-          path: app/build/reports/lint-results-*.html
+          files: |
+            app/build/test-results/testDebugUnitTest/TEST-*.xml
+            app/build/test-results/testReleaseUnitTest/TEST-*.xml
+          check_name: Unit Test Results
+          comment_mode: create new
           
-      - name: Upload unit test reports
-        uses: actions/upload-artifact@v4
+      - name: Report Android Lint Results
+        uses: yutailang0119/action-android-lint@v1
         if: always()
         with:
-          name: unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest/
+          xml_path: app/build/reports/lint-results-debug.xml
           
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
