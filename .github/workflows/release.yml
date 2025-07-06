@@ -35,6 +35,17 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
         
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+          
+      - name: Setup signing environment
+        run: |
+          echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+        
       - name: Run tests before release
         run: |
           ./gradlew lintRelease testReleaseUnitTest --parallel --build-cache
@@ -42,6 +53,9 @@ jobs:
       - name: Build release AAB (Android App Bundle)
         run: |
           ./gradlew bundleRelease --parallel --build-cache
+          
+      - name: Clean up keystore
+        run: rm -f release.keystore
           
       - name: Upload AAB to Play Store
         uses: r0adkll/upload-google-play@v1.1.3
