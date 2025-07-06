@@ -7,6 +7,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -151,7 +152,8 @@ class ElevationFragment : Fragment() {
                         )
                     }
                 } catch (e: SecurityException) {
-                    // This shouldn't happen since we checked permissions, but handle gracefully
+                    // Log the unexpected security exception for debugging
+                    Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
                     elevationTextView.text = getString(R.string.location_permission_required)
                 }
             }
