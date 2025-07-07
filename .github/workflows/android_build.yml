@@ -84,7 +84,7 @@ jobs:
         uses: yutailang0119/action-android-lint@v5
         if: always()
         with:
-          xml_path: app/build/reports/lint-results-debug.xml
+          report-path: app/build/reports/lint-results-debug.xml
           
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
