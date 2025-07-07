@@ -5,17 +5,18 @@ plugins {
 
 android {
     namespace = "com.bizzarosn.heightmark"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.bizzarosn.heightmark"
-        minSdk = 35
-        targetSdk = 35
-        versionCode = 1
+        minSdk = 34
+        targetSdk = 36
+        versionCode = 4
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
     signingConfigs {
         create("release") {
@@ -36,11 +37,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Generate debug symbols for native code
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
             // Only use signing config if all environment variables are available
             val hasSigningConfig = System.getenv("KEYSTORE_FILE") != null && 
                                  System.getenv("KEYSTORE_PASSWORD") != null && 
@@ -50,14 +56,23 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
+        }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     kotlin {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
 }
