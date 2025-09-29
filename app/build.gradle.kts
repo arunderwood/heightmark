@@ -16,7 +16,7 @@ android {
         versionCode = 4
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.bizzarosn.heightmark.HiltTestRunner"
     }
 
 
