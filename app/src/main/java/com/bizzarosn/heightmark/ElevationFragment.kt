@@ -1,7 +1,6 @@
 package com.bizzarosn.heightmark
 
 import android.Manifest
-import android.content.Context.LOCATION_SERVICE
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -11,27 +10,31 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.annotation.RequiresPermission
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class ElevationFragment : Fragment() {
 
-    companion object {
-        private const val ELEVATION_READINGS_COUNT = 10
-    }
+    @Inject
+    lateinit var preferencesRepository: PreferencesRepository
 
-    private lateinit var preferencesRepository: PreferencesRepository
+    @Inject
+    lateinit var elevationService: ElevationService
+
+    @Inject
+    lateinit var locationManager: LocationManager
+
     private lateinit var elevationTextView: ElevationTextView
-    private val elevationService = ElevationService(ELEVATION_READINGS_COUNT)
     private var useMetricUnit = true
-    private var locationManager: LocationManager? = null
     private var locationListener: LocationListener? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
@@ -55,7 +58,6 @@ class ElevationFragment : Fragment() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
-        preferencesRepository = PreferencesRepository(requireContext().applicationContext)
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         val unitSwitch = view.findViewById<SwitchCompat>(R.id.unit_switch)
@@ -116,11 +118,7 @@ class ElevationFragment : Fragment() {
             elevationTextView.text = getString(R.string.location_permission_required)
             return
         }
-        
-        if (locationManager == null) {
-            locationManager = requireContext().getSystemService(LOCATION_SERVICE) as LocationManager
-        }
-        
+
         if (locationListener == null) {
             locationListener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
@@ -136,35 +134,31 @@ class ElevationFragment : Fragment() {
                 override fun onProviderDisabled(provider: String) {}
             }
         }
-        
+
         elevationTextView.startLoadingAnimation()
-        
-        locationManager?.let { manager ->
-            locationListener?.let { listener ->
-                try {
-                    if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                        manager.requestLocationUpdates(
-                            LocationManager.GPS_PROVIDER, 1000, 1f, listener
-                        )
-                    } else if (manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                        manager.requestLocationUpdates(
-                            LocationManager.NETWORK_PROVIDER, 1000, 1f, listener
-                        )
-                    }
-                } catch (e: SecurityException) {
-                    // Log the unexpected security exception for debugging
-                    Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
-                    elevationTextView.text = getString(R.string.location_permission_required)
+
+        locationListener?.let { listener ->
+            try {
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.GPS_PROVIDER, 1000, 1f, listener
+                    )
+                } else if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER, 1000, 1f, listener
+                    )
                 }
+            } catch (e: SecurityException) {
+                // Log the unexpected security exception for debugging
+                Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
+                elevationTextView.text = getString(R.string.location_permission_required)
             }
         }
     }
     
     private fun stopLocationUpdates() {
-        locationManager?.let { manager ->
-            locationListener?.let { listener ->
-                manager.removeUpdates(listener)
-            }
+        locationListener?.let { listener ->
+            locationManager.removeUpdates(listener)
         }
     }
     
@@ -188,7 +182,6 @@ class ElevationFragment : Fragment() {
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()
-        locationManager = null
         locationListener = null
     }
 }

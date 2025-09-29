@@ -32,12 +32,24 @@ HeightMark is a simple Android app that displays the user's current elevation/al
 
 The app follows a simple Android architecture with these key components:
 
-- **MainActivity**: Entry point with navigation setup using Navigation Component
-- **ElevationFragment**: Main UI fragment that handles location permissions and displays elevation
+- **HeightMarkApplication**: Application class annotated with `@HiltAndroidApp` for dependency injection
+- **MainActivity**: Entry point with navigation setup using Navigation Component (annotated with `@AndroidEntryPoint`)
+- **ElevationFragment**: Main UI fragment that handles location permissions and displays elevation (uses `@Inject` for dependencies)
 - **ElevationService**: Business logic for averaging elevation readings (configurable number of readings)
 - **ElevationTextView**: Custom TextView with loading animation for elevation display
 - **LocationPermissionHandler**: Robust permission handler with state management and lifecycle awareness
 - **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units)
+
+### Dependency Injection
+
+The app uses **Hilt** for dependency injection:
+- **AppModule** (`di/AppModule.kt`): Defines dependency providers
+  - `PreferencesRepository`: Singleton scope
+  - `ElevationService`: Factory scope (new instance per injection)
+  - `LocationManager`: Singleton scope
+- **@AndroidEntryPoint**: Applied to `MainActivity` and `ElevationFragment` to enable injection
+- **@Inject**: Used in fragments to inject dependencies automatically
+- **Benefits**: Improved testability, cleaner code, centralized dependency management
 
 ### Permission Handling
 
@@ -49,10 +61,12 @@ The app uses a sophisticated permission handling system:
 
 ## Key Technical Details
 
-- **Target SDK**: 35 (Android 15)
-- **Minimum SDK**: 35 (Android 15)
-- **Language**: Kotlin
-- **Architecture Components**: Navigation Component, DataStore Preferences
+- **Compile SDK**: 36
+- **Target SDK**: 36
+- **Minimum SDK**: 34 (Android 14)
+- **Language**: Kotlin 2.2.20
+- **Architecture Components**: Navigation Component, DataStore Preferences, Hilt 2.56
+- **Dependency Injection**: Hilt with KSP 2.2.20-2.0.3 (Kotlin Symbol Processing)
 - **Location**: Uses GPS_PROVIDER for elevation readings, averages multiple readings for accuracy
 - **Permissions**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
 - **Dependencies**: Uses version catalog (gradle/libs.versions.toml) for dependency management
@@ -88,6 +102,14 @@ The project includes comprehensive testing strategy:
 - `androidx.test.runner`: For instrumented test runner
 - `androidx.test.espresso.core`: For UI testing
 - `androidx.test.ext.junit`: For JUnit extensions
+- `hilt-android-testing`: For Hilt dependency injection in tests
+
+### Hilt Testing
+All instrumented tests use Hilt for dependency injection:
+- **@HiltAndroidTest**: Applied to all test classes requiring Hilt
+- **HiltAndroidRule**: Manages Hilt components in tests
+- Tests inject dependencies via `@Inject` just like production code
+- Rule ordering is important: HiltAndroidRule must be first (order = 0)
 
 ### CI Testing
 GitHub Actions runs comprehensive quality checks with optimized job dependencies:
