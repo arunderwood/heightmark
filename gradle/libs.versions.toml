@@ -1,5 +1,5 @@
 [versions]
-agp = "8.11.1"
+agp = "8.13.0"
 kotlin = "2.2.20"
 coreKtx = "1.17.0"
 junit = "4.13.2"
@@ -11,9 +11,9 @@ activity = "1.11.0"
 constraintlayout = "2.2.1"
 navigation = "2.9.5"
 datastorePreferences = "1.1.7"
-testRules = "1.6.1"
+testRules = "1.7.0"
 testRunner = "1.7.0"
-hilt = "2.56"
+hilt = "2.57.2"
 ksp = "2.2.20-2.0.3"
 
 [libraries]
