@@ -81,7 +81,7 @@ android {
     }
     testOptions {
         unitTests.all {
-            maxParallelForks = Runtime.getRuntime().availableProcessors()
+            it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
     }
 }
