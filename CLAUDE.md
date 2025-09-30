@@ -217,22 +217,8 @@ GitHub Actions runs comprehensive quality checks with optimized job dependencies
   - Gradle build cache with read/write optimization
     - `build-and-test` job: write access for cache population
     - `instrumented-tests` job: read-only to avoid cache conflicts
-  - Android SDK caching to avoid repeated SDK downloads (~10-20s savings)
+  - Android SDK caching to avoid repeated SDK downloads
   - AVD caching with version-specific keys
-- **Emulator optimizations**:
-  - Increased RAM (4GB) and heap (512MB) for faster test execution
-  - Optimized emulator flags for CI environment
-- **Artifact retention**: 7-day retention to reduce storage costs
-
-**Speed Improvements:**
-- **Baseline** (pre-optimization): ~4 minutes total
-- **Target** (post-optimization): ~1.5-2.5 minutes total (40-60% faster)
-- **Cold cache**: First run may be similar to baseline
-- **Warm cache**: Significant speedup on subsequent runs
-- Job breakdown:
-  - Security scan: ~15-20s (parallel, no dependencies)
-  - Build + lint + tests: ~40-60s (with warm cache)
-  - Instrumented tests: ~2-2.5 minutes (emulator startup + tests)
 
 ### GitHub Workflow Testing
 
