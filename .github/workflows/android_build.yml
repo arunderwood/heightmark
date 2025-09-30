@@ -140,9 +140,9 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-35-${{ runner.os }}-v2
+          key: avd-35-${{ runner.os }}-v3-disk2gb
           restore-keys: |
-            avd-35-${{ runner.os }}-
+            avd-35-${{ runner.os }}-v3-
             avd-35-
             
       - name: Create AVD and generate snapshot for caching
@@ -152,6 +152,7 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
+          disk-size: 2048M
           ram-size: 4096M
           heap-size: 512M
           force-avd-creation: false
@@ -165,6 +166,7 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
+          disk-size: 2048M
           ram-size: 4096M
           heap-size: 512M
           force-avd-creation: false
