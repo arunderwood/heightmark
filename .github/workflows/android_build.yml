@@ -72,9 +72,6 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Warm up Gradle and download dependencies
-        run: ./gradlew dependencies --no-daemon
-        
       - name: Run lint, tests, and build in parallel
         id: build
         run: |
