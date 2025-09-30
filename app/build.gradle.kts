@@ -13,8 +13,10 @@ android {
         applicationId = "com.bizzarosn.heightmark"
         minSdk = 34
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0"
+
+        // Support dynamic versioning from CI, with local fallback
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 4
+        versionName = project.findProperty("versionName") as String? ?: "1.0.0-dev"
 
         testInstrumentationRunner = "com.bizzarosn.heightmark.HiltTestRunner"
     }

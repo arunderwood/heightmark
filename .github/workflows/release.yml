@@ -1,12 +1,14 @@
 name: Release to Google Play Store
 
 on:
-  push:
-    tags:
-      - 'v*'  # Triggers on version tags like v1.0.0, v2.1.3, etc.
+  workflow_run:
+    workflows: ["Android CI"]
+    branches: [main]
+    types:
+      - completed
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false
@@ -15,88 +17,87 @@ jobs:
   release:
     name: Build & Release to Play Store
     runs-on: ubuntu-latest
-    
+    # Only run if android_build.yml succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
-        
+        with:
+          fetch-depth: 0
+
+      - name: Calculate version
+        id: version
+        run: |
+          # Base offset to allow room for manual releases
+          BASE_CODE=10000
+          VERSION_PREFIX="1.0"
+
+          VERSION_CODE=$((BASE_CODE + ${{ github.run_number }}))
+          VERSION_NAME="${VERSION_PREFIX}.${{ github.run_number }}"
+
+          echo "code=${VERSION_CODE}" >> $GITHUB_OUTPUT
+          echo "name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "📦 Building version: ${VERSION_NAME} (versionCode: ${VERSION_CODE})"
+
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
-          
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-            
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-        
+
       - name: Decode keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-          
+
       - name: Setup signing environment
         run: |
-          echo "KEYSTORE_FILE=app/release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-        
-      - name: Run tests before release
+
+      - name: Build release AAB
         run: |
-          ./gradlew lintRelease testReleaseUnitTest --parallel --build-cache
-          
-      - name: Build release AAB (Android App Bundle)
-        run: |
-          ./gradlew bundleRelease --parallel --build-cache
-          
+          ./gradlew bundleRelease \
+            -PversionName=${{ steps.version.outputs.name }} \
+            -PversionCode=${{ steps.version.outputs.code }} \
+            --parallel --build-cache
+
       - name: Clean up keystore
+        if: always()
         run: rm -f app/release.keystore
-          
+
       - name: Upload AAB to Play Store
         uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
           packageName: com.bizzarosn.heightmark
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: internal  # Options: internal, alpha, beta, production
+          track: internal
           status: completed
           inAppUpdatePriority: 2
           whatsNewDirectory: metadata/whatsnew
-          
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
-          path: |
-            app/build/outputs/bundle/release/*.aab
-            app/build/reports/lint-results-release.html
+          name: release-artifacts-v${{ steps.version.outputs.name }}
+          path: app/build/outputs/bundle/release/*.aab
           retention-days: 30
-          
+
       - name: Create GitHub Release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: HeightMark ${{ github.ref }}
-          draft: false
-          prerelease: false
-          body: |
-            ## What's Changed
-            
-            Release notes for HeightMark version ${{ github.ref_name }}
-            
-            ### Features
-            - Real-time elevation tracking
-            - GPS-based altitude measurement
-            - Metric/Imperial unit switching
-            - Material Design UI with dark mode support
-            
-            ### Technical Details
-            - Built with Android SDK 35
-            - Optimized for accuracy with averaged readings
-            - Robust location permission handling
-            
-            **Available on Google Play Store**
+        run: |
+          gh release create "v${{ steps.version.outputs.name }}" \
+            --repo="$GITHUB_REPOSITORY" \
+            --title="HeightMark v${{ steps.version.outputs.name }}" \
+            --generate-notes \
+            app/build/outputs/bundle/release/app-release.aab
