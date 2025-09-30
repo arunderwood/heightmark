@@ -79,6 +79,11 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
         }
     }
+    testOptions {
+        unitTests.all {
+            it.maxParallelForks = Runtime.getRuntime().availableProcessors()
+        }
+    }
 }
 
 dependencies {

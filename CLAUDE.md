@@ -204,25 +204,21 @@ GitHub Actions runs comprehensive quality checks with optimized job dependencies
 **Performance Optimizations:**
 - **Combined jobs**: Merged lint, unit tests, and build into single job to eliminate setup overhead
 - **Maximum parallelization**: Security scan runs immediately without dependencies
-- **Gradle optimizations**: 
+- **Gradle optimizations**:
   - `--parallel` enables multi-module parallel builds
   - `--build-cache` caches intermediate build outputs
   - `gradle.workers.max=4` uses all available CPU cores
   - `kotlin.incremental=false` avoids incremental compilation overhead in CI
+  - `--configuration-cache` for faster Gradle configuration phase (Gradle 8.14+)
+  - 4GB JVM heap for Gradle daemon, 2GB for Kotlin compiler
+  - Configuration on demand for faster project configuration
+  - Parallel test execution with `maxParallelForks` equal to CPU cores
 - **Advanced caching**:
   - Gradle build cache with read/write optimization
-  - Android SDK caching with improved cache keys
+    - `build-and-test` job: write access for cache population
+    - `instrumented-tests` job: read-only to avoid cache conflicts
+  - Android SDK caching to avoid repeated SDK downloads
   - AVD caching with version-specific keys
-- **Emulator optimizations**:
-  - Increased RAM (4GB) and heap (512MB) for faster test execution
-  - `cache-read-only=true` for instrumented tests to avoid cache conflicts
-- **Artifact retention**: 7-day retention to reduce storage costs
-
-**Speed Improvements:**
-- ~60% faster total CI time through job consolidation
-- ~40% faster Gradle builds through parallelization and caching
-- ~30% faster emulator startup through optimized AVD caching
-- Immediate security scanning without waiting for setup
 
 ### GitHub Workflow Testing
 
