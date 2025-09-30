@@ -124,16 +124,6 @@ jobs:
         with:
           cache-read-only: true
 
-      - name: Cache Android SDK
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.android/sdk
-            ~/.android/build-cache
-          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            android-sdk-${{ runner.os }}-
-
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
