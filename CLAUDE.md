@@ -65,11 +65,93 @@ The app uses a sophisticated permission handling system:
 - **Target SDK**: 36
 - **Minimum SDK**: 34 (Android 14)
 - **Language**: Kotlin 2.2.20
-- **Architecture Components**: Navigation Component, DataStore Preferences, Hilt 2.56
+- **Architecture Components**: Navigation Component, DataStore Preferences, Hilt 2.57.2
 - **Dependency Injection**: Hilt with KSP 2.2.20-2.0.3 (Kotlin Symbol Processing)
 - **Location**: Uses GPS_PROVIDER for elevation readings, averages multiple readings for accuracy
 - **Permissions**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
 - **Dependencies**: Uses version catalog (gradle/libs.versions.toml) for dependency management
+
+## Release Process
+
+### Automatic Releases
+
+Every merge to `main` automatically creates a new release if all quality checks pass.
+
+**Flow:**
+1. Developer creates PR → `android_build.yml` runs full quality checks
+2. PR merged to main → `android_build.yml` re-runs on main
+3. If all checks pass → `release.yml` automatically triggers
+4. Release workflow:
+   - Calculates version based on workflow run number
+   - Builds signed AAB
+   - Uploads to Play Store internal track
+   - Creates GitHub release with auto-generated notes
+
+### Version Numbering
+
+**versionCode (Play Store):** Monotonically increasing integer
+- Formula: `10000 + workflow_run_number`
+- Example: Run #7 → versionCode = 10007
+- Always increases, never decreases (Play Store requirement)
+
+**versionName (User-visible):** Human-readable version string
+- Format: `MAJOR.MINOR.PATCH`
+- Example: Run #7 → versionName = "1.0.7"
+- PATCH auto-increments with each release
+
+**Current version:** Based on workflow run number (currently at run #6)
+- Next release will be: v1.0.7 (versionCode 10007)
+
+### Bumping Major/Minor Versions
+
+When you want to release a new major or minor version (e.g., v1.1.0 or v2.0.0):
+
+**Edit `.github/workflows/release.yml`:**
+```yaml
+# For v1.1.x releases
+VERSION_PREFIX="1.1"
+BASE_CODE=11000
+
+# For v2.0.x releases
+VERSION_PREFIX="2.0"
+BASE_CODE=20000
+```
+
+Then next release will be v1.1.7 or v2.0.7 (depending on current run_number).
+
+### Manual Version Override
+
+For local testing or manual releases:
+```bash
+./gradlew bundleRelease \
+  -PversionName=1.0.999 \
+  -PversionCode=10999
+```
+
+### Rollback Strategy
+
+If a release has issues:
+```bash
+# Revert the problematic commit
+git revert <commit-sha>
+git push origin main
+
+# Or revert a merge
+git revert -m 1 <merge-commit-sha>
+git push origin main
+```
+
+A new release is automatically created with the fix.
+
+### Quality Gates
+
+All releases must pass:
+- ✅ Security scan (Trivy)
+- ✅ Lint checks
+- ✅ Unit tests
+- ✅ Instrumented tests (Android emulator)
+
+Releases only happen if ALL checks pass.
 
 ## Testing
 
