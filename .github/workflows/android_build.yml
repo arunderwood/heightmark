@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 
 env:
-  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false -Dorg.gradle.configuration-cache=true
 
 jobs:
   # Fast parallel jobs that don't need setup
@@ -56,10 +56,22 @@ jobs:
           
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-            
+        with:
+          cache-read-only: false
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/sdk
+            ~/.android/build-cache
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-        
+
       - name: Warm up Gradle and download dependencies
         run: ./gradlew dependencies --no-daemon
         
@@ -109,10 +121,22 @@ jobs:
           
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-          
+        with:
+          cache-read-only: true
+
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.android/sdk
+            ~/.android/build-cache
+          key: android-sdk-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-
+
       - name: Make gradlew executable
         run: chmod +x ./gradlew
-        
+
       - name: Enable KVM group perms
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
