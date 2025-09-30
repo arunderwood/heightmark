@@ -81,6 +81,8 @@ jobs:
           packageName: com.bizzarosn.heightmark
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
           track: internal
+          status: draft
+          userFraction: 1.0
           inAppUpdatePriority: 2
           whatsNewDirectory: metadata/whatsnew
 
