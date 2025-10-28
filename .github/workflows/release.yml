@@ -86,7 +86,7 @@ jobs:
           whatsNewDirectory: metadata/whatsnew
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-artifacts-v${{ steps.version.outputs.name }}
           path: app/build/outputs/bundle/release/*.aab
