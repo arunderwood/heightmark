@@ -6,8 +6,10 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Include DataStore preferences file (user's metric/imperial unit setting) -->
+    <include domain="file" path="datastore/settings.preferences_pb"/>
+
+    <!-- Exclude cache and temporary files -->
+    <exclude domain="file" path="cache/"/>
+    <exclude domain="file" path="no_backup/"/>
 </full-backup-content>
