@@ -14,7 +14,7 @@ datastorePreferences = "1.2.0"
 testRules = "1.7.0"
 testRunner = "1.7.0"
 hilt = "2.57.2"
-ksp = "2.3.3"
+ksp = "2.3.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
