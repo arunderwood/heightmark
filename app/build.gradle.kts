@@ -101,6 +101,11 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
+    
+    // Mocking for unit tests
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
+    
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.test.rules)

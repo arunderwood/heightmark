@@ -103,38 +103,9 @@ class StartupCrashTest {
         }
     }
 
-    @Test
-    fun preferencesRepositoryInitializationDoesNotCrash() {
-        // Test that PreferencesRepository injected by Hilt works correctly
-        var crashed = false
-
-        try {
-            assertNotNull("PreferencesRepository should be injected", preferencesRepository)
-        } catch (e: Exception) {
-            crashed = true
-            fail("PreferencesRepository initialization crashed: ${e.message}")
-        }
-
-        assertFalse("PreferencesRepository initialization should not crash", crashed)
-    }
-
-    @Test
-    fun elevationServiceInitializationDoesNotCrash() {
-        // Test that ElevationService injected by Hilt works correctly
-        var crashed = false
-
-        try {
-            assertNotNull("ElevationService should be injected", elevationService)
-
-            // Test basic functionality
-            val result = elevationService.addElevationReading(100.0)
-            assertEquals("First reading should equal input", 100.0, result, 0.001)
-
-        } catch (e: Exception) {
-            crashed = true
-            fail("ElevationService initialization crashed: ${e.message}")
-        }
-
-        assertFalse("ElevationService initialization should not crash", crashed)
-    }
+    // Note: These tests are now covered by faster unit tests:
+    // - DependencyInjectionTest.preferencesRepositoryInitializationDoesNotCrash()
+    // - DependencyInjectionTest.elevationServiceInitializationDoesNotCrash()
+    // 
+    // Keeping only Android-specific integration tests here
 }
