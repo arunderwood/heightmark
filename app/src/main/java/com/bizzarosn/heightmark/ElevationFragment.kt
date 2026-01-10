@@ -120,6 +120,7 @@ class ElevationFragment : Fragment() {
         }
 
         if (locationListener == null) {
+            @Suppress("DEPRECATION", "DEPRECATION_ERROR")
             locationListener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
                     val elevation = location.altitude
@@ -130,7 +131,10 @@ class ElevationFragment : Fragment() {
                 @Deprecated("Deprecated in Java")
                 override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
 
+                @Deprecated("Deprecated in Java")
                 override fun onProviderEnabled(provider: String) {}
+
+                @Deprecated("Deprecated in Java")
                 override fun onProviderDisabled(provider: String) {}
             }
         }

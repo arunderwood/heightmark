@@ -103,9 +103,8 @@ dependencies {
     testImplementation(libs.junit)
     
     // Mocking for unit tests
-    testImplementation("io.mockk:mockk:1.13.8")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("androidx.datastore:datastore-preferences-core:1.2.0")
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
     
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
