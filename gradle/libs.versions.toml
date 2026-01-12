@@ -16,7 +16,7 @@ testRunner = "1.7.0"
 hilt = "2.57.2"
 ksp = "2.3.4"
 mockk = "1.14.7"
-coroutinesTest = "1.7.3"
+coroutinesTest = "1.10.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
