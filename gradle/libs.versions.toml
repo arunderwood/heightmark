@@ -15,7 +15,7 @@ testRules = "1.7.0"
 testRunner = "1.7.0"
 hilt = "2.57.2"
 ksp = "2.3.4"
-mockk = "1.13.8"
+mockk = "1.14.7"
 coroutinesTest = "1.7.3"
 
 [libraries]
