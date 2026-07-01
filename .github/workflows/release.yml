@@ -10,6 +10,13 @@ on:
 permissions:
   contents: write
 
+# The Play Publishing API allows only one open edit per app, so concurrent
+# release runs (e.g. from a Dependabot merge batch) invalidate each other.
+# Serialize them; intermediate queued runs are superseded by the newest.
+concurrency:
+  group: play-store-release
+  cancel-in-progress: false
+
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false
 
