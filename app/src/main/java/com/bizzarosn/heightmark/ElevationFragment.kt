@@ -10,12 +10,13 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.SwitchCompat
+import android.widget.TextView
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.loadingindicator.LoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -33,8 +34,10 @@ class ElevationFragment : Fragment() {
     @Inject
     lateinit var locationManager: LocationManager
 
-    private lateinit var elevationTextView: ElevationTextView
+    private lateinit var elevationTextView: TextView
+    private lateinit var loadingIndicator: LoadingIndicator
     private var useMetricUnit = true
+    private var hasFix = false
     private var locationListener: LocationListener? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
@@ -53,25 +56,22 @@ class ElevationFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_elevation, container, false)
-        ViewCompat.setOnApplyWindowInsetsListener(view.findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
-        val unitSwitch = view.findViewById<SwitchCompat>(R.id.unit_switch)
+        loadingIndicator = view.findViewById(R.id.loading_indicator)
+        val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
 
         lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
-            unitSwitch.isChecked = useMetricUnit
+            unitToggleGroup.check(if (useMetricUnit) R.id.button_meters else R.id.button_feet)
             permissionHandler.checkPermission()
         }
 
-        unitSwitch.setOnCheckedChangeListener { _, isChecked ->
-            useMetricUnit = isChecked
+        unitToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            useMetricUnit = checkedId == R.id.button_meters
             lifecycleScope.launch {
-                preferencesRepository.setUseMetricUnit(isChecked)
+                preferencesRepository.setUseMetricUnit(useMetricUnit)
                 updateUIWithElevation()
             }
         }
@@ -86,21 +86,21 @@ class ElevationFragment : Fragment() {
                     startLocationUpdates()
                 } else {
                     // This shouldn't happen, but handle gracefully
-                    elevationTextView.text = getString(R.string.location_permission_required)
+                    showPermissionRequired()
                 }
             }
             is LocationPermissionState.Denied,
             is LocationPermissionState.PermanentlyDenied -> {
                 stopLocationUpdates()
-                elevationTextView.text = getString(R.string.location_permission_required)
+                showPermissionRequired()
             }
             is LocationPermissionState.RequiresRationale -> {
                 stopLocationUpdates()
-                elevationTextView.text = getString(R.string.location_permission_required)
+                showPermissionRequired()
             }
         }
     }
-    
+
     private fun hasLocationPermission(): Boolean {
         return ContextCompat.checkSelfPermission(
             requireContext(),
@@ -111,11 +111,11 @@ class ElevationFragment : Fragment() {
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     private fun startLocationUpdates() {
         // Double-check permissions before starting location updates
         if (!hasLocationPermission()) {
-            elevationTextView.text = getString(R.string.location_permission_required)
+            showPermissionRequired()
             return
         }
 
@@ -125,6 +125,7 @@ class ElevationFragment : Fragment() {
                 override fun onLocationChanged(location: Location) {
                     val elevation = location.altitude
                     elevationService.addElevationReading(elevation)
+                    hasFix = true
                     updateUIWithElevation()
                 }
 
@@ -139,7 +140,9 @@ class ElevationFragment : Fragment() {
             }
         }
 
-        elevationTextView.startLoadingAnimation()
+        if (!hasFix) {
+            setLoading(true)
+        }
 
         locationListener?.let { listener ->
             try {
@@ -155,22 +158,22 @@ class ElevationFragment : Fragment() {
             } catch (e: SecurityException) {
                 // Log the unexpected security exception for debugging
                 Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
-                elevationTextView.text = getString(R.string.location_permission_required)
+                showPermissionRequired()
             }
         }
     }
-    
+
     private fun stopLocationUpdates() {
         locationListener?.let { listener ->
             locationManager.removeUpdates(listener)
         }
     }
-    
+
     override fun onPause() {
         super.onPause()
         stopLocationUpdates()
     }
-    
+
     override fun onResume() {
         super.onResume()
         if (hasLocationPermission()) {
@@ -178,11 +181,29 @@ class ElevationFragment : Fragment() {
         }
     }
 
-    private fun updateUIWithElevation() {
-        val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
-        elevationTextView.updateElevation(localizedElevation, useMetricUnit)
+    private fun setLoading(loading: Boolean) {
+        loadingIndicator.isVisible = loading
+        if (loading) {
+            elevationTextView.text = getString(R.string.loading_elevation)
+        }
     }
-    
+
+    private fun showPermissionRequired() {
+        setLoading(false)
+        elevationTextView.text = getString(R.string.location_permission_required)
+    }
+
+    private fun updateUIWithElevation() {
+        // No reading yet (e.g. units toggled before the first GPS fix) — keep the loading state
+        if (!hasFix) return
+
+        setLoading(false)
+        val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
+        val elevationRounded = kotlin.math.round(localizedElevation).toInt()
+        val unit = getString(if (useMetricUnit) R.string.unit_meters else R.string.unit_feet)
+        elevationTextView.text = getString(R.string.elevation_text, elevationRounded, unit)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopLocationUpdates()

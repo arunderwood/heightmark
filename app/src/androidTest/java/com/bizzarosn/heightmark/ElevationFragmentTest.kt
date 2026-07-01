@@ -50,24 +50,24 @@ class ElevationFragmentTest {
     }
 
     @Test
-    fun unitSwitchIsDisplayed() {
+    fun unitToggleIsDisplayed() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // Verify unit switch is present
-            onView(withId(R.id.unit_switch)).check(matches(isDisplayed()))
+            // Verify unit toggle group is present
+            onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
         }
     }
 
     @Test
-    fun unitSwitchChangesUnits() {
+    fun unitToggleChangesUnits() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             // Wait for initial state
             Thread.sleep(1000)
-            
-            // Click the unit switch
-            onView(withId(R.id.unit_switch)).perform(click())
-            
-            // Verify the switch state changed
-            onView(withId(R.id.unit_switch)).check(matches(isDisplayed()))
+
+            // Select feet
+            onView(withId(R.id.button_feet)).perform(click())
+
+            // Verify the feet button is now checked
+            onView(withId(R.id.button_feet)).check(matches(isChecked()))
         }
     }
 
