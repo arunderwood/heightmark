@@ -6,13 +6,16 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.graphics.Color
 import android.util.Log
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -184,13 +187,26 @@ class ElevationFragment : Fragment() {
     private fun setLoading(loading: Boolean) {
         loadingIndicator.isVisible = loading
         if (loading) {
-            elevationTextView.text = getString(R.string.loading_elevation)
+            showStatusText(getString(R.string.loading_elevation))
         }
     }
 
     private fun showPermissionRequired() {
         setLoading(false)
-        elevationTextView.text = getString(R.string.location_permission_required)
+        showStatusText(getString(R.string.location_permission_required))
+    }
+
+    // Status messages use headline type; the hero display size is reserved for the value
+    private fun showStatusText(text: String) {
+        applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
+        elevationTextView.text = text
+    }
+
+    private fun applyTextAppearance(textAppearanceAttr: Int) {
+        val resolved = TypedValue()
+        requireContext().theme.resolveAttribute(textAppearanceAttr, resolved, true)
+        TextViewCompat.setTextAppearance(elevationTextView, resolved.resourceId)
+        elevationTextView.setTextColor(Color.WHITE)
     }
 
     private fun updateUIWithElevation() {
@@ -198,6 +214,7 @@ class ElevationFragment : Fragment() {
         if (!hasFix) return
 
         setLoading(false)
+        applyTextAppearance(com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized)
         val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
         val elevationRounded = kotlin.math.round(localizedElevation).toInt()
         val unit = getString(if (useMetricUnit) R.string.unit_meters else R.string.unit_feet)

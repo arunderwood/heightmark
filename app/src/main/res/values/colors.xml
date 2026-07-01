@@ -15,5 +15,5 @@
     <color name="hm_on_tertiary_container">#001F23</color>
 
     <color name="hm_splash_background">#F7FBF1</color>
-    <color name="hm_scrim_overlay">#99000000</color>
+    <color name="hm_scrim_overlay">#B3000000</color>
 </resources>

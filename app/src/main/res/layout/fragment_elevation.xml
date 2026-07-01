@@ -19,23 +19,15 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/background" />
 
-    <View
-        android:id="@+id/scrim"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="@drawable/bg_bottom_scrim"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHeight_percent="0.55"
-        app:layout_constraintStart_toStartOf="parent" />
-
     <LinearLayout
         android:id="@+id/content_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_bottom_scrim"
         android:gravity="center_horizontal"
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
+        android:paddingTop="48dp"
         android:paddingBottom="32dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -43,11 +35,13 @@
 
         <com.google.android.material.loadingindicator.LoadingIndicator
             android:id="@+id/loading_indicator"
+            style="@style/Widget.Material3.LoadingIndicator.Contained"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:visibility="gone"
-            app:indicatorColor="?attr/colorPrimaryContainer" />
+            app:containerColor="#66000000"
+            app:indicatorColor="@android:color/white" />
 
         <TextView
             android:id="@+id/elevation_label"
@@ -64,17 +58,15 @@
             android:gravity="center"
             android:maxLines="2"
             android:text="@string/loading_elevation"
-            android:textAppearance="?attr/textAppearanceDisplayLargeEmphasized"
-            android:textColor="@android:color/white"
-            app:autoSizeMaxTextSize="64sp"
-            app:autoSizeMinTextSize="20sp"
-            app:autoSizeTextType="uniform" />
+            android:textAppearance="?attr/textAppearanceHeadlineSmall"
+            android:textColor="@android:color/white" />
 
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/unit_toggle_group"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
+            android:theme="@style/ThemeOverlay.HeightMark.OnImage"
             app:selectionRequired="true"
             app:singleSelection="true">
 
