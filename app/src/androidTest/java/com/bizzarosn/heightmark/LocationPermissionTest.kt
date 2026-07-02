@@ -48,7 +48,7 @@ class LocationPermissionTest {
         // Test app behavior with only fine location permission
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-            onView(withId(R.id.unit_switch)).check(matches(isDisplayed()))
+            onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
         }
     }
 }
@@ -75,7 +75,7 @@ class CoarseLocationPermissionTest {
         // Test app behavior with only coarse location permission
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-            onView(withId(R.id.unit_switch)).check(matches(isDisplayed()))
+            onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
         }
     }
 }
@@ -103,7 +103,7 @@ class BothLocationPermissionsTest {
         // Test app behavior with both location permissions
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-            onView(withId(R.id.unit_switch)).check(matches(isDisplayed()))
+            onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
 
             // With permissions, the app should start location updates
             // Wait a moment for the permission handler to initialize

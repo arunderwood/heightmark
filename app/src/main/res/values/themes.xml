@@ -1,9 +1,33 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.HeightMark" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    <!-- Base application theme. Alpine brand colors act as the fallback palette;
+         dynamic color (Material You) overlays them when available. -->
+    <style name="Base.Theme.HeightMark" parent="Theme.Material3Expressive.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/hm_primary</item>
+        <item name="colorOnPrimary">@color/hm_on_primary</item>
+        <item name="colorPrimaryContainer">@color/hm_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/hm_on_primary_container</item>
+        <item name="colorSecondary">@color/hm_secondary</item>
+        <item name="colorOnSecondary">@color/hm_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/hm_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/hm_on_secondary_container</item>
+        <item name="colorTertiary">@color/hm_tertiary</item>
+        <item name="colorOnTertiary">@color/hm_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/hm_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/hm_on_tertiary_container</item>
     </style>
 
     <style name="Theme.HeightMark" parent="Base.Theme.HeightMark" />
+
+    <!-- For controls sitting on top of the photo/scrim: white text and outline
+         regardless of light/dark theme, while checked containers keep theme colors. -->
+    <style name="ThemeOverlay.HeightMark.OnImage" parent="">
+        <item name="colorOnSurface">@android:color/white</item>
+        <item name="colorOutline">#B3FFFFFF</item>
+    </style>
+
+    <style name="Theme.HeightMark.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/hm_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.HeightMark</item>
+    </style>
 </resources>

@@ -9,40 +9,82 @@
 
     <ImageView
         android:id="@+id/imageView"
-        android:layout_width="409dp"
-        android:layout_height="412dp"
-        android:contentDescription="@string/background"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:srcCompat="@drawable/background"
-        tools:ignore="ImageContrastCheck" />
-
-    <LinearLayout
-        android:layout_width="409dp"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="94dp"
-        android:orientation="vertical"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/background" />
+
+    <LinearLayout
+        android:id="@+id/content_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_bottom_scrim"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="48dp"
+        android:paddingBottom="32dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <com.bizzarosn.heightmark.ElevationTextView
+        <com.google.android.material.loadingindicator.LoadingIndicator
+            android:id="@+id/loading_indicator"
+            style="@style/Widget.Material3.LoadingIndicator.Contained"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            app:containerColor="#66000000"
+            app:indicatorColor="@android:color/white" />
+
+        <TextView
+            android:id="@+id/elevation_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/current_elevation"
+            android:textAppearance="?attr/textAppearanceLabelLargeEmphasized"
+            android:textColor="#CCFFFFFF" />
+
+        <TextView
             android:id="@+id/elevation_text_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:text="@string/elevation_text"
-            android:textSize="24sp" />
+            android:maxLines="2"
+            android:text="@string/loading_elevation"
+            android:textAppearance="?attr/textAppearanceHeadlineSmall"
+            android:textColor="@android:color/white" />
 
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/unit_switch"
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/unit_toggle_group"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:layout_marginTop="16dp"
-            android:text="@string/use_metric_units" />
+            android:layout_marginTop="20dp"
+            android:theme="@style/ThemeOverlay.HeightMark.OnImage"
+            app:selectionRequired="true"
+            app:singleSelection="true">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_meters"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="96dp"
+                android:text="@string/unit_meters" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/button_feet"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="96dp"
+                android:text="@string/unit_feet" />
+        </com.google.android.material.button.MaterialButtonToggleGroup>
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
