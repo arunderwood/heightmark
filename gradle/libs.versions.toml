@@ -15,7 +15,7 @@ testRules = "1.7.0"
 testRunner = "1.7.0"
 hilt = "2.60"
 ksp = "2.3.9"
-mockk = "1.14.9"
+mockk = "1.14.11"
 coroutinesTest = "1.11.0"
 coreSplashscreen = "1.2.0"
 
