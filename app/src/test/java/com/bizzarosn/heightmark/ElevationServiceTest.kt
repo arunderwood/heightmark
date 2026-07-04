@@ -65,6 +65,16 @@ class ElevationServiceTest {
     }
 
     @Test
+    fun `readingCount tracks the rolling window size`() {
+        assertEquals(0, elevationService.readingCount())
+        elevationService.addElevationReading(100.0)
+        assertEquals(1, elevationService.readingCount())
+        repeat(5) { elevationService.addElevationReading(100.0) }
+        // Capped at the window size (3)
+        assertEquals(3, elevationService.readingCount())
+    }
+
+    @Test
     fun `rolling average calculation is accurate with decimal values`() {
         elevationService.addElevationReading(100.5)
         elevationService.addElevationReading(200.3)

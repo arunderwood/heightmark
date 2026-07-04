@@ -13,6 +13,7 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 private object PreferencesKeys {
     val USE_METRIC_UNIT = booleanPreferencesKey("use_metric_unit")
+    val SHOW_DETAILS = booleanPreferencesKey("show_details")
 }
 
 class PreferencesRepository(context: Context) {
@@ -25,6 +26,16 @@ class PreferencesRepository(context: Context) {
     suspend fun setUseMetricUnit(useMetric: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.USE_METRIC_UNIT] = useMetric
+        }
+    }
+
+    val showDetails: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[PreferencesKeys.SHOW_DETAILS] == true
+    }
+
+    suspend fun setShowDetails(show: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SHOW_DETAILS] = show
         }
     }
 }
