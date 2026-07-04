@@ -86,5 +86,27 @@
                 android:minWidth="96dp"
                 android:text="@string/unit_feet" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/details_toggle"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/details_show"
+            android:textColor="#CCFFFFFF"
+            app:iconTint="#CCFFFFFF" />
+
+        <TextView
+            android:id="@+id/details_panel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:fontFamily="monospace"
+            android:textAppearance="?attr/textAppearanceBodySmall"
+            android:textColor="#CCFFFFFF"
+            android:visibility="gone"
+            tools:text="Sea-level elevation: 112.4 m"
+            tools:visibility="visible" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>
