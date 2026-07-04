@@ -1,12 +1,17 @@
 package com.bizzarosn.heightmark
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
 import android.graphics.Color
+import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
 import android.view.LayoutInflater
@@ -16,8 +21,11 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.TextViewCompat
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.loadingindicator.LoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
@@ -47,8 +55,25 @@ class ElevationFragment : Fragment() {
     private var useMetricUnit = true
     private var hasFix = false
     private var locationListener: LocationListener? = null
+    private var searchTimeoutJob: Job? = null
+    private var locationOffDialog: AlertDialog? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
+
+    private val providersChangedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != LocationManager.PROVIDERS_CHANGED_ACTION) return
+            if (!permissionHandler.hasFinePermission()) return
+            if (isGpsAvailable()) {
+                locationOffDialog?.dismiss()
+                locationOffDialog = null
+                startLocationUpdates()
+            } else {
+                stopLocationUpdates()
+                showLocationOff()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -97,6 +122,10 @@ class ElevationFragment : Fragment() {
                     showPermissionRequired()
                 }
             }
+            is LocationPermissionState.CoarseOnly -> {
+                stopLocationUpdates()
+                showPreciseLocationRequired()
+            }
             is LocationPermissionState.Denied,
             is LocationPermissionState.PermanentlyDenied -> {
                 stopLocationUpdates()
@@ -113,17 +142,23 @@ class ElevationFragment : Fragment() {
         return ContextCompat.checkSelfPermission(
             requireContext(),
             Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED ||
-        ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun isGpsAvailable(): Boolean {
+        return locationManager.isLocationEnabled &&
+            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
     }
 
     private fun startLocationUpdates() {
         // Double-check permissions before starting location updates
         if (!hasLocationPermission()) {
             showPermissionRequired()
+            return
+        }
+
+        if (!isGpsAvailable()) {
+            showLocationOff()
             return
         }
 
@@ -152,15 +187,25 @@ class ElevationFragment : Fragment() {
         locationListener?.let { listener ->
             try {
                 // Only GNSS fixes carry altitude, so the network provider is useless here
-                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                        LocationManager.GPS_PROVIDER, 1000, 1f, listener
-                    )
-                }
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER, 1000, 1f, listener
+                )
+                startSearchTimeout()
             } catch (e: SecurityException) {
                 // Log the unexpected security exception for debugging
                 Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
                 showPermissionRequired()
+            }
+        }
+    }
+
+    private fun startSearchTimeout() {
+        if (hasFix) return
+        searchTimeoutJob?.cancel()
+        searchTimeoutJob = viewLifecycleOwner.lifecycleScope.launch {
+            delay(SEARCH_TIMEOUT_MS)
+            if (!hasFix) {
+                showStatusText(getString(R.string.still_searching))
             }
         }
     }
@@ -180,6 +225,8 @@ class ElevationFragment : Fragment() {
     }
 
     private fun stopLocationUpdates() {
+        searchTimeoutJob?.cancel()
+        searchTimeoutJob = null
         locationListener?.let { listener ->
             locationManager.removeUpdates(listener)
         }
@@ -187,11 +234,21 @@ class ElevationFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
+        requireContext().unregisterReceiver(providersChangedReceiver)
+        locationOffDialog?.dismiss()
+        locationOffDialog = null
         stopLocationUpdates()
     }
 
     override fun onResume() {
         super.onResume()
+        // System broadcast, so RECEIVER_NOT_EXPORTED still receives it
+        ContextCompat.registerReceiver(
+            requireContext(),
+            providersChangedReceiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         if (hasLocationPermission()) {
             startLocationUpdates()
         }
@@ -207,6 +264,27 @@ class ElevationFragment : Fragment() {
     private fun showPermissionRequired() {
         setLoading(false)
         showStatusText(getString(R.string.location_permission_required))
+    }
+
+    private fun showPreciseLocationRequired() {
+        setLoading(false)
+        showStatusText(getString(R.string.precise_location_required))
+    }
+
+    private fun showLocationOff() {
+        setLoading(false)
+        showStatusText(getString(R.string.location_services_off))
+
+        if (locationOffDialog?.isShowing == true) return
+        locationOffDialog = AlertDialog.Builder(requireContext())
+            .setTitle(getString(R.string.location_services_off))
+            .setMessage(getString(R.string.location_services_off_message))
+            .setPositiveButton(getString(R.string.open_location_settings)) { _, _ ->
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        locationOffDialog?.show()
     }
 
     // Status messages use headline type; the hero display size is reserved for the value
@@ -238,5 +316,9 @@ class ElevationFragment : Fragment() {
         super.onDestroy()
         stopLocationUpdates()
         locationListener = null
+    }
+
+    companion object {
+        private const val SEARCH_TIMEOUT_MS = 30_000L
     }
 }

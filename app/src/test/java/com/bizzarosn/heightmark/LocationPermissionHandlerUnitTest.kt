@@ -32,6 +32,7 @@ class LocationPermissionHandlerUnitTest {
         val testState = LocationPermissionState.Denied
         val result = when (testState) {
             is LocationPermissionState.Granted -> "access granted"
+            is LocationPermissionState.CoarseOnly -> "coarse only"
             is LocationPermissionState.Denied -> "access denied"
             is LocationPermissionState.PermanentlyDenied -> "permanently denied"
             is LocationPermissionState.RequiresRationale -> "requires rationale"
