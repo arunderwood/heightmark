@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.bizzarosn.heightmark"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.bizzarosn.heightmark"

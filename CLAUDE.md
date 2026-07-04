@@ -64,7 +64,7 @@ The app uses a sophisticated permission handling system:
 
 ## Key Technical Details
 
-- **Compile SDK**: 36
+- **Compile SDK**: 37
 - **Target SDK**: 36
 - **Minimum SDK**: 34 (Android 14)
 - **Language**: Kotlin 2.2.20
