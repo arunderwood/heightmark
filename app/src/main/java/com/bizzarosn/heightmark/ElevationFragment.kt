@@ -6,11 +6,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.GnssStatus
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.location.LocationRequest
 import android.os.Bundle
+import android.os.SystemClock
 import android.graphics.Color
 import android.provider.Settings
 import android.util.Log
@@ -34,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Locale
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -54,14 +61,30 @@ class ElevationFragment : Fragment() {
     @Inject
     lateinit var idleWakeMonitor: IdleWakeMonitor
 
+    @Inject
+    lateinit var sensorManager: SensorManager
+
     private lateinit var elevationTextView: TextView
     private lateinit var loadingIndicator: LoadingIndicator
+    private lateinit var detailsToggle: TextView
+    private lateinit var detailsPanel: TextView
     private var useMetricUnit = true
     private var hasFix = false
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
     private var locationOffDialog: AlertDialog? = null
     private val stillnessDetector = StillnessDetector()
+
+    // Details panel state
+    private var showDetails = false
+    private var isIdle = false
+    private var lastLocation: Location? = null
+    private var satellitesUsed = 0
+    private var satellitesVisible = 0
+    private var lastPressureHpa: Float? = null
+    private var gnssStatusCallback: GnssStatus.Callback? = null
+    private var pressurePanelListener: SensorEventListener? = null
+    private var detailsTickerJob: Job? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
 
@@ -97,11 +120,14 @@ class ElevationFragment : Fragment() {
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         loadingIndicator = view.findViewById(R.id.loading_indicator)
+        detailsToggle = view.findViewById(R.id.details_toggle)
+        detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
 
         lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
             unitToggleGroup.check(if (useMetricUnit) R.id.button_meters else R.id.button_feet)
+            applyDetailsVisibility(preferencesRepository.showDetails.first())
             permissionHandler.checkPermission()
         }
 
@@ -111,10 +137,84 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch {
                 preferencesRepository.setUseMetricUnit(useMetricUnit)
                 updateUIWithElevation()
+                refreshDetails()
+            }
+        }
+
+        detailsToggle.setOnClickListener {
+            lifecycleScope.launch {
+                preferencesRepository.setShowDetails(!showDetails)
+                applyDetailsVisibility(!showDetails)
             }
         }
 
         return view
+    }
+
+    private fun applyDetailsVisibility(show: Boolean) {
+        showDetails = show
+        detailsPanel.isVisible = show
+        detailsToggle.text = getString(if (show) R.string.details_hide else R.string.details_show)
+        if (show) {
+            startDetailsSources()
+            refreshDetails()
+        } else {
+            stopDetailsSources()
+        }
+    }
+
+    /** Extra data feeds (satellites, pressure, fix-age ticker) used only by the panel. */
+    private fun startDetailsSources() {
+        if (gnssStatusCallback == null && hasLocationPermission()) {
+            val callback = object : GnssStatus.Callback() {
+                override fun onSatelliteStatusChanged(status: GnssStatus) {
+                    satellitesVisible = status.satelliteCount
+                    satellitesUsed = (0 until status.satelliteCount).count { status.usedInFix(it) }
+                    refreshDetails()
+                }
+            }
+            try {
+                locationManager.registerGnssStatusCallback(
+                    ContextCompat.getMainExecutor(requireContext()), callback
+                )
+                gnssStatusCallback = callback
+            } catch (e: SecurityException) {
+                Log.e("ElevationFragment", "Cannot register GnssStatus callback", e)
+            }
+        }
+
+        if (pressurePanelListener == null) {
+            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sensor ->
+                val listener = object : SensorEventListener {
+                    override fun onSensorChanged(event: SensorEvent) {
+                        lastPressureHpa = event.values[0]
+                    }
+
+                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+                }
+                if (sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)) {
+                    pressurePanelListener = listener
+                }
+            }
+        }
+
+        if (detailsTickerJob == null) {
+            detailsTickerJob = viewLifecycleOwner.lifecycleScope.launch {
+                while (true) {
+                    delay(1_000)
+                    refreshDetails()
+                }
+            }
+        }
+    }
+
+    private fun stopDetailsSources() {
+        gnssStatusCallback?.let { locationManager.unregisterGnssStatusCallback(it) }
+        gnssStatusCallback = null
+        pressurePanelListener?.let { sensorManager.unregisterListener(it) }
+        pressurePanelListener = null
+        detailsTickerJob?.cancel()
+        detailsTickerJob = null
     }
 
     private fun handlePermissionStateChange(state: LocationPermissionState) {
@@ -228,7 +328,9 @@ class ElevationFragment : Fragment() {
             }
             elevationService.addElevationReading(elevation)
             hasFix = true
+            lastLocation = location
             updateUIWithElevation()
+            refreshDetails()
         }
     }
 
@@ -248,6 +350,8 @@ class ElevationFragment : Fragment() {
             ) {
                 goActive()
             }
+            isIdle = true
+            refreshDetails()
         } catch (e: SecurityException) {
             Log.e("ElevationFragment", "Lost permission while going idle", e)
             showPermissionRequired()
@@ -255,8 +359,74 @@ class ElevationFragment : Fragment() {
     }
 
     private fun goActive() {
+        isIdle = false
         stillnessDetector.reset()
         startLocationUpdates()
+        refreshDetails()
+    }
+
+    private fun refreshDetails() {
+        if (!showDetails || !::detailsPanel.isInitialized) return
+
+        val lines = mutableListOf<String>()
+        lines += getString(if (isIdle) R.string.detail_state_idle else R.string.detail_state_tracking)
+
+        val location = lastLocation
+        if (location == null) {
+            lines += getString(R.string.detail_no_fix)
+        } else {
+            if (location.hasMslAltitude()) {
+                lines += getString(R.string.detail_msl, formatLength(location.mslAltitudeMeters))
+            }
+            lines += getString(R.string.detail_ellipsoid, formatLength(location.altitude))
+            if (location.hasMslAltitude()) {
+                lines += getString(
+                    R.string.detail_geoid_offset,
+                    formatLength(location.altitude - location.mslAltitudeMeters)
+                )
+            }
+            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
+                formatLength(location.verticalAccuracyMeters.toDouble())
+            } else {
+                "?"
+            }
+            val horizontalAccuracy = if (location.hasAccuracy()) {
+                formatLength(location.accuracy.toDouble())
+            } else {
+                "?"
+            }
+            lines += getString(R.string.detail_accuracy, verticalAccuracy, horizontalAccuracy)
+            lines += getString(
+                R.string.detail_position,
+                String.format(Locale.getDefault(), "%.5f", location.latitude),
+                String.format(Locale.getDefault(), "%.5f", location.longitude)
+            )
+            val fixAgeSeconds =
+                (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000
+            lines += getString(R.string.detail_fix_age, fixAgeSeconds)
+        }
+
+        lines += getString(R.string.detail_satellites, satellitesUsed, satellitesVisible)
+        lastPressureHpa?.let { pressure ->
+            lines += getString(
+                R.string.detail_pressure,
+                String.format(Locale.getDefault(), "%.1f", pressure)
+            )
+        }
+        lines += getString(R.string.detail_readings, elevationService.readingCount())
+
+        detailsPanel.text = lines.joinToString("\n")
+    }
+
+    private fun formatLength(meters: Double): String {
+        return if (useMetricUnit) {
+            getString(R.string.value_meters, String.format(Locale.getDefault(), "%.1f", meters))
+        } else {
+            getString(
+                R.string.value_feet,
+                String.format(Locale.getDefault(), "%.0f", meters * 3.28084)
+            )
+        }
     }
 
     private fun stopLocationUpdates() {
@@ -273,7 +443,9 @@ class ElevationFragment : Fragment() {
         requireContext().unregisterReceiver(providersChangedReceiver)
         locationOffDialog?.dismiss()
         locationOffDialog = null
+        stopDetailsSources()
         stopLocationUpdates()
+        isIdle = false
     }
 
     override fun onResume() {
@@ -288,6 +460,9 @@ class ElevationFragment : Fragment() {
         if (hasLocationPermission()) {
             stillnessDetector.reset()
             startLocationUpdates()
+        }
+        if (showDetails) {
+            startDetailsSources()
         }
     }
 

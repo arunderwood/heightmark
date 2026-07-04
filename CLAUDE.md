@@ -36,9 +36,12 @@ The app follows a simple Android architecture with these key components:
 - **MainActivity**: Entry point with navigation setup using Navigation Component (annotated with `@AndroidEntryPoint`)
 - **ElevationFragment**: Main UI fragment that handles location permissions and displays elevation (uses `@Inject` for dependencies)
 - **ElevationService**: Business logic for averaging elevation readings (configurable number of readings)
-- **ElevationTextView**: Custom TextView with loading animation for elevation display
-- **LocationPermissionHandler**: Robust permission handler with state management and lifecycle awareness
-- **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units)
+- **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data)
+- **StillnessDetector**: Declares the device stationary from GNSS fix speed/drift over a 30s window
+- **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll
+- **PressureDeltaDetector**: Sustained-pressure-change detection with weather-drift absorption and HVAC/door-transient rejection
+- **LocationPermissionHandler**: Robust permission handler with state management and lifecycle awareness, including the Android 12+ coarse-only ("approximate") grant state
+- **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel)
 
 ### Dependency Injection
 
@@ -54,7 +57,7 @@ The app uses **Hilt** for dependency injection:
 ### Permission Handling
 
 The app uses a sophisticated permission handling system:
-- **LocationPermissionState**: Sealed class defining permission states (Granted, Denied, PermanentlyDenied, RequiresRationale)
+- **LocationPermissionState**: Sealed class defining permission states (Granted, CoarseOnly, Denied, PermanentlyDenied, RequiresRationale)
 - **Lifecycle-aware**: Automatically cleans up dialogs and resources when fragment is destroyed
 - **Multiple permissions**: Handles both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
 - **Proper state management**: Clear separation between permission states and UI responses
@@ -67,8 +70,10 @@ The app uses a sophisticated permission handling system:
 - **Language**: Kotlin 2.2.20
 - **Architecture Components**: Navigation Component, DataStore Preferences, Hilt 2.57.2
 - **Dependency Injection**: Hilt with KSP 2.2.20-2.0.3 (Kotlin Symbol Processing)
-- **Location**: Uses GPS_PROVIDER for elevation readings, averages multiple readings for accuracy
-- **Permissions**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
+- **Location**: Uses the platform `LocationManager` with GPS_PROVIDER only — **deliberately no Google Play services / play-services-location dependency**, so the app runs identically on certified and de-googled AOSP devices (GrapheneOS, LineageOS, etc.) and stays F-Droid-eligible. Do not introduce GMS dependencies.
+- **Altitude**: Every fix is converted from WGS84 ellipsoid height to Mean Sea Level via the platform `AltitudeConverter`; fixes without altitude or with vertical accuracy worse than 50 m are excluded from the rolling average
+- **Power**: GPS duty-cycles off after ~30 s stationary; wake triggers are significant motion, barometer delta (vertical movement), passive-provider fixes, and a 3-minute fallback poll on barometer-less devices
+- **Permissions**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; coarse-only ("approximate") grants get an in-context precise-location upgrade prompt because GPS requires fine
 - **Dependencies**: Uses version catalog (gradle/libs.versions.toml) for dependency management
 
 ## Release Process

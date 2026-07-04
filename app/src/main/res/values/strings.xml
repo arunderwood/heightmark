@@ -18,4 +18,20 @@
     <string name="location_services_off_message">Turn on location to determine your elevation.</string>
     <string name="open_location_settings">Open Location Settings</string>
     <string name="still_searching">Still searching for GPS signal… This works best outdoors with a clear view of the sky.</string>
+    <string name="details_show">Details</string>
+    <string name="details_hide">Hide details</string>
+    <string name="detail_msl">Sea-level elevation: %1$s</string>
+    <string name="detail_ellipsoid">Ellipsoid altitude: %1$s</string>
+    <string name="detail_geoid_offset">Geoid offset: %1$s</string>
+    <string name="detail_accuracy">Accuracy: ±%1$s vertical · ±%2$s horizontal</string>
+    <string name="detail_satellites">Satellites: %1$d used / %2$d visible</string>
+    <string name="detail_position">Position: %1$s, %2$s</string>
+    <string name="detail_fix_age">Last fix: %1$ds ago</string>
+    <string name="detail_readings">Readings in average: %1$d</string>
+    <string name="detail_pressure">Pressure: %1$s hPa</string>
+    <string name="detail_state_tracking">GPS: tracking</string>
+    <string name="detail_state_idle">GPS: idle (stationary)</string>
+    <string name="detail_no_fix">Waiting for first fix…</string>
+    <string name="value_meters">%1$s m</string>
+    <string name="value_feet">%1$s ft</string>
 </resources>
