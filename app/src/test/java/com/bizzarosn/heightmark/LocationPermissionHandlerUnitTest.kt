@@ -29,7 +29,7 @@ class LocationPermissionHandlerUnitTest {
     @Test
     fun `permission state when expressions work`() {
         // Verify sealed class works with when statements
-        val testState = LocationPermissionState.Denied
+        val testState: LocationPermissionState = LocationPermissionState.Denied
         val result = when (testState) {
             is LocationPermissionState.Granted -> "access granted"
             is LocationPermissionState.CoarseOnly -> "coarse only"
