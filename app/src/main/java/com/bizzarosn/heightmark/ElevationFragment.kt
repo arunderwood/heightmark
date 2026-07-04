@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.location.LocationRequest
 import android.os.Bundle
 import android.graphics.Color
 import android.provider.Settings
@@ -50,6 +51,9 @@ class ElevationFragment : Fragment() {
     @Inject
     lateinit var altitudeResolver: AltitudeResolver
 
+    @Inject
+    lateinit var idleWakeMonitor: IdleWakeMonitor
+
     private lateinit var elevationTextView: TextView
     private lateinit var loadingIndicator: LoadingIndicator
     private var useMetricUnit = true
@@ -57,6 +61,7 @@ class ElevationFragment : Fragment() {
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
     private var locationOffDialog: AlertDialog? = null
+    private val stillnessDetector = StillnessDetector()
 
     private lateinit var permissionHandler: LocationPermissionHandler
 
@@ -163,21 +168,7 @@ class ElevationFragment : Fragment() {
         }
 
         if (locationListener == null) {
-            @Suppress("DEPRECATION", "DEPRECATION_ERROR")
-            locationListener = object : LocationListener {
-                override fun onLocationChanged(location: Location) {
-                    onGnssFix(location)
-                }
-
-                @Deprecated("Deprecated in Java")
-                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-
-                @Deprecated("Deprecated in Java")
-                override fun onProviderEnabled(provider: String) {}
-
-                @Deprecated("Deprecated in Java")
-                override fun onProviderDisabled(provider: String) {}
-            }
+            locationListener = LocationListener { location -> onGnssFix(location) }
         }
 
         if (!hasFix) {
@@ -186,9 +177,16 @@ class ElevationFragment : Fragment() {
 
         locationListener?.let { listener ->
             try {
-                // Only GNSS fixes carry altitude, so the network provider is useless here
+                // Only GNSS fixes carry altitude, so the network provider is useless here.
+                // No min update distance: stillness detection needs fixes while parked.
+                val request = LocationRequest.Builder(UPDATE_INTERVAL_MS)
+                    .setQuality(LocationRequest.QUALITY_HIGH_ACCURACY)
+                    .build()
                 locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER, 1000, 1f, listener
+                    LocationManager.GPS_PROVIDER,
+                    request,
+                    ContextCompat.getMainExecutor(requireContext()),
+                    listener
                 )
                 startSearchTimeout()
             } catch (e: SecurityException) {
@@ -211,8 +209,18 @@ class ElevationFragment : Fragment() {
     }
 
     private fun onGnssFix(location: Location) {
+        if (stillnessDetector.feed(location)) {
+            goIdle(location)
+        }
+
         // A fix without altitude would read as 0.0 and poison the average
         if (!location.hasAltitude()) return
+        // Skip fixes whose vertical error would drag the average around
+        if (location.hasVerticalAccuracy() &&
+            location.verticalAccuracyMeters > MAX_VERTICAL_ACCURACY_M
+        ) {
+            return
+        }
         viewLifecycleOwner.lifecycleScope.launch {
             // Geoid data loads from disk on first use in a region
             val elevation = withContext(Dispatchers.IO) {
@@ -224,7 +232,35 @@ class ElevationFragment : Fragment() {
         }
     }
 
+    /**
+     * The device has been still for a while: turn the GPS radio off and let
+     * [IdleWakeMonitor] (significant motion, barometer, passive fixes) turn it
+     * back on when we move. The displayed elevation stays frozen meanwhile.
+     */
+    private fun goIdle(anchor: Location) {
+        if (idleWakeMonitor.isRunning) return
+        stopLocationUpdates()
+        try {
+            idleWakeMonitor.start(
+                anchor,
+                ContextCompat.getMainExecutor(requireContext()),
+                viewLifecycleOwner.lifecycleScope
+            ) {
+                goActive()
+            }
+        } catch (e: SecurityException) {
+            Log.e("ElevationFragment", "Lost permission while going idle", e)
+            showPermissionRequired()
+        }
+    }
+
+    private fun goActive() {
+        stillnessDetector.reset()
+        startLocationUpdates()
+    }
+
     private fun stopLocationUpdates() {
+        idleWakeMonitor.stop()
         searchTimeoutJob?.cancel()
         searchTimeoutJob = null
         locationListener?.let { listener ->
@@ -250,6 +286,7 @@ class ElevationFragment : Fragment() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         if (hasLocationPermission()) {
+            stillnessDetector.reset()
             startLocationUpdates()
         }
     }
@@ -320,5 +357,7 @@ class ElevationFragment : Fragment() {
 
     companion object {
         private const val SEARCH_TIMEOUT_MS = 30_000L
+        private const val UPDATE_INTERVAL_MS = 1_000L
+        private const val MAX_VERTICAL_ACCURACY_M = 50f
     }
 }
