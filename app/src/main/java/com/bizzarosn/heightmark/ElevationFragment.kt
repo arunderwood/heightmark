@@ -179,7 +179,7 @@ class ElevationFragment : Fragment() {
                 )
                 gnssStatusCallback = callback
             } catch (e: SecurityException) {
-                Log.e("ElevationFragment", "Cannot register GnssStatus callback", e)
+                Log.e(TAG, "Cannot register GnssStatus callback", e)
             }
         }
 
@@ -291,7 +291,7 @@ class ElevationFragment : Fragment() {
                 startSearchTimeout()
             } catch (e: SecurityException) {
                 // Log the unexpected security exception for debugging
-                Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
+                Log.e(TAG, "Unexpected SecurityException despite permission check", e)
                 showPermissionRequired()
             }
         }
@@ -353,7 +353,7 @@ class ElevationFragment : Fragment() {
             isIdle = true
             refreshDetails()
         } catch (e: SecurityException) {
-            Log.e("ElevationFragment", "Lost permission while going idle", e)
+            Log.e(TAG, "Lost permission while going idle", e)
             showPermissionRequired()
         }
     }
@@ -424,7 +424,7 @@ class ElevationFragment : Fragment() {
         } else {
             getString(
                 R.string.value_feet,
-                String.format(Locale.getDefault(), "%.0f", meters * 3.28084)
+                String.format(Locale.getDefault(), "%.0f", UnitConverter.metersToFeet(meters))
             )
         }
     }
@@ -531,6 +531,7 @@ class ElevationFragment : Fragment() {
     }
 
     companion object {
+        private const val TAG = "ElevationFragment"
         private const val SEARCH_TIMEOUT_MS = 30_000L
         private const val UPDATE_INTERVAL_MS = 1_000L
         private const val MAX_VERTICAL_ACCURACY_M = 50f
