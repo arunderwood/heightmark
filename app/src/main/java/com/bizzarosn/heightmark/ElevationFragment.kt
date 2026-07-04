@@ -21,8 +21,10 @@ import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.loadingindicator.LoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -36,6 +38,9 @@ class ElevationFragment : Fragment() {
 
     @Inject
     lateinit var locationManager: LocationManager
+
+    @Inject
+    lateinit var altitudeResolver: AltitudeResolver
 
     private lateinit var elevationTextView: TextView
     private lateinit var loadingIndicator: LoadingIndicator
@@ -126,10 +131,7 @@ class ElevationFragment : Fragment() {
             @Suppress("DEPRECATION", "DEPRECATION_ERROR")
             locationListener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
-                    val elevation = location.altitude
-                    elevationService.addElevationReading(elevation)
-                    hasFix = true
-                    updateUIWithElevation()
+                    onGnssFix(location)
                 }
 
                 @Deprecated("Deprecated in Java")
@@ -149,13 +151,10 @@ class ElevationFragment : Fragment() {
 
         locationListener?.let { listener ->
             try {
+                // Only GNSS fixes carry altitude, so the network provider is useless here
                 if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                     locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER, 1000, 1f, listener
-                    )
-                } else if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                    locationManager.requestLocationUpdates(
-                        LocationManager.NETWORK_PROVIDER, 1000, 1f, listener
                     )
                 }
             } catch (e: SecurityException) {
@@ -163,6 +162,20 @@ class ElevationFragment : Fragment() {
                 Log.e("ElevationFragment", "Unexpected SecurityException despite permission check", e)
                 showPermissionRequired()
             }
+        }
+    }
+
+    private fun onGnssFix(location: Location) {
+        // A fix without altitude would read as 0.0 and poison the average
+        if (!location.hasAltitude()) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Geoid data loads from disk on first use in a region
+            val elevation = withContext(Dispatchers.IO) {
+                altitudeResolver.mslAltitudeMeters(location)
+            }
+            elevationService.addElevationReading(elevation)
+            hasFix = true
+            updateUIWithElevation()
         }
     }
 
