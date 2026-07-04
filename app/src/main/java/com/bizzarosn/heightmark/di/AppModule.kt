@@ -1,9 +1,11 @@
 package com.bizzarosn.heightmark.di
 
 import android.content.Context
+import android.hardware.SensorManager
 import android.location.LocationManager
 import com.bizzarosn.heightmark.AltitudeResolver
 import com.bizzarosn.heightmark.ElevationService
+import com.bizzarosn.heightmark.IdleWakeMonitor
 import com.bizzarosn.heightmark.PreferencesRepository
 import dagger.Module
 import dagger.Provides
@@ -43,5 +45,21 @@ object AppModule {
         @ApplicationContext context: Context
     ): AltitudeResolver {
         return AltitudeResolver(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSensorManager(
+        @ApplicationContext context: Context
+    ): SensorManager {
+        return context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    }
+
+    @Provides
+    fun provideIdleWakeMonitor(
+        locationManager: LocationManager,
+        sensorManager: SensorManager
+    ): IdleWakeMonitor {
+        return IdleWakeMonitor(locationManager, sensorManager)
     }
 }
