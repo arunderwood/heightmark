@@ -15,6 +15,9 @@ import androidx.lifecycle.LifecycleOwner
 
 sealed class LocationPermissionState {
     object Granted : LocationPermissionState()
+
+    /** Only approximate location granted (Android 12+ downgrade); GPS needs precise. */
+    object CoarseOnly : LocationPermissionState()
     object Denied : LocationPermissionState()
     object PermanentlyDenied : LocationPermissionState()
     object RequiresRationale : LocationPermissionState()
@@ -27,7 +30,8 @@ class LocationPermissionHandler(
     
     private var locationPermissionLauncher: ActivityResultLauncher<Array<String>>? = null
     private var currentDialog: AlertDialog? = null
-    
+    private var upgradeDialogShown = false
+
     private val permissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
         Manifest.permission.ACCESS_COARSE_LOCATION
@@ -50,27 +54,39 @@ class LocationPermissionHandler(
     
     fun checkPermission() {
         when {
-            hasLocationPermission() -> {
+            hasFinePermission() -> {
                 onPermissionStateChanged(LocationPermissionState.Granted)
             }
-            
+
+            hasLocationPermission() -> {
+                // Approximate-only grant: GPS (and therefore elevation) needs precise
+                onPermissionStateChanged(LocationPermissionState.CoarseOnly)
+                showPreciseUpgradeDialog()
+            }
+
             shouldShowRationale() -> {
                 onPermissionStateChanged(LocationPermissionState.RequiresRationale)
                 showPermissionRequiredDialog()
             }
-            
+
             else -> {
                 requestPermissions()
             }
         }
     }
-    
+
     fun hasLocationPermission(): Boolean {
         return permissions.any { permission ->
             ContextCompat.checkSelfPermission(
                 fragment.requireContext(), permission
             ) == PackageManager.PERMISSION_GRANTED
         }
+    }
+
+    fun hasFinePermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            fragment.requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
     }
     
     private fun shouldShowRationale(): Boolean {
@@ -85,20 +101,47 @@ class LocationPermissionHandler(
     
     private fun handlePermissionResult(permissions: Map<String, Boolean>) {
         when {
-            permissions.values.any { it } -> {
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true -> {
                 onPermissionStateChanged(LocationPermissionState.Granted)
             }
-            
+
+            permissions.values.any { it } -> {
+                onPermissionStateChanged(LocationPermissionState.CoarseOnly)
+                showPreciseUpgradeDialog()
+            }
+
             shouldShowRationale() -> {
                 onPermissionStateChanged(LocationPermissionState.RequiresRationale)
                 showPermissionRequiredDialog()
             }
-            
+
             else -> {
                 onPermissionStateChanged(LocationPermissionState.PermanentlyDenied)
                 showPermanentDenialDialog()
             }
         }
+    }
+
+    private fun showPreciseUpgradeDialog() {
+        // Ask once per session; re-requesting in a loop would just re-show the
+        // system dialog every time the fragment resumes
+        if (upgradeDialogShown) return
+        if (currentDialog?.isShowing == true) return
+        upgradeDialogShown = true
+
+        currentDialog = AlertDialog.Builder(fragment.requireContext())
+            .setTitle(fragment.getString(R.string.precise_location_required))
+            .setMessage(fragment.getString(R.string.precise_location_required_message))
+            .setPositiveButton(fragment.getString(R.string.grant_permission)) { _, _ ->
+                requestPermissions()
+            }
+            .setNegativeButton(fragment.getString(R.string.open_settings)) { _, _ ->
+                openAppSettings()
+            }
+            .setCancelable(false)
+            .create()
+
+        currentDialog?.show()
     }
     
     private fun showPermissionRequiredDialog() {

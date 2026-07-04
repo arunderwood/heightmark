@@ -12,4 +12,10 @@
     <string name="exit_app">Exit App</string>
     <string name="permission_permanently_denied_message">This app needs location permission to determine your elevation. Please open settings and enable location permission manually.</string>
     <string name="open_settings">Open Settings</string>
+    <string name="precise_location_required">Precise Location Required</string>
+    <string name="precise_location_required_message">Elevation comes from GPS, which needs precise location. Approximate location isn\'t enough. Please allow precise location.</string>
+    <string name="location_services_off">Location Is Off</string>
+    <string name="location_services_off_message">Turn on location to determine your elevation.</string>
+    <string name="open_location_settings">Open Location Settings</string>
+    <string name="still_searching">Still searching for GPS signal… This works best outdoors with a clear view of the sky.</string>
 </resources>
