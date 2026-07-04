@@ -2,6 +2,7 @@ package com.bizzarosn.heightmark.di
 
 import android.content.Context
 import android.location.LocationManager
+import com.bizzarosn.heightmark.AltitudeResolver
 import com.bizzarosn.heightmark.ElevationService
 import com.bizzarosn.heightmark.PreferencesRepository
 import dagger.Module
@@ -34,5 +35,13 @@ object AppModule {
         @ApplicationContext context: Context
     ): LocationManager {
         return context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    }
+
+    @Provides
+    @Singleton
+    fun provideAltitudeResolver(
+        @ApplicationContext context: Context
+    ): AltitudeResolver {
+        return AltitudeResolver(context)
     }
 }
