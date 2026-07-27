@@ -58,6 +58,14 @@ class ElevationFragmentTest {
     }
 
     @Test
+    fun stabilityLineIsDisplayed() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            // The settling line is visible whenever GPS is usable
+            onView(withId(R.id.stability_line)).check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
     fun unitToggleChangesUnits() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             // Wait for initial state
@@ -74,18 +82,18 @@ class ElevationFragmentTest {
     @Test
     fun elevationServiceHandlesMultipleReadings() {
         val elevationService = ElevationService(3)
-        
-        // Add readings
+
+        // Readings within the jump threshold roll through the window
         val avg1 = elevationService.addElevationReading(100.0)
-        val avg2 = elevationService.addElevationReading(200.0)
-        val avg3 = elevationService.addElevationReading(300.0)
-        val avg4 = elevationService.addElevationReading(400.0) // Should drop first reading
-        
+        val avg2 = elevationService.addElevationReading(102.0)
+        val avg3 = elevationService.addElevationReading(98.0)
+        val avg4 = elevationService.addElevationReading(104.0) // Should drop first reading
+
         // Verify averaging behavior
-        assert(avg1 == 100.0)
-        assert(avg2 == 150.0)
-        assert(avg3 == 200.0)
-        assert(avg4 == 300.0) // (200 + 300 + 400) / 3
+        assert(avg1.averageMeters == 100.0)
+        assert(avg2.averageMeters == 101.0)
+        assert(avg3.averageMeters == 100.0)
+        assert(avg4.averageMeters > 101.3 && avg4.averageMeters < 101.4) // (102 + 98 + 104) / 3
     }
 
     @Test
