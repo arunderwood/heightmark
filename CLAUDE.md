@@ -35,7 +35,9 @@ The app follows a simple Android architecture with these key components:
 - **HeightMarkApplication**: Application class annotated with `@HiltAndroidApp` for dependency injection
 - **MainActivity**: Entry point with navigation setup using Navigation Component (annotated with `@AndroidEntryPoint`)
 - **ElevationFragment**: Main UI fragment that handles location permissions and displays elevation (uses `@Inject` for dependencies)
-- **ElevationService**: Business logic for averaging elevation readings (configurable number of readings)
+- **ElevationService**: Rolling average of elevation readings with jump re-anchoring — sustained same-side outliers (elevator, stairs) flush and re-seed the window so the display snaps to the new level; exposes a `Snapshot` with window fill progress and a latched `settled` flag
+- **ReadingState**: Sealed state (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; drives the settling line and the hero number's opacity
+- **StabilityLineView**: The "settling line" — a canvas-drawn kinetic line under the elevation number: traveling wave while acquiring, flattening/brightening core while converging, breathing glow when stable, motionless dotted line (with dimmed number) when the reading is dormant/stale
 - **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data)
 - **StillnessDetector**: Declares the device stationary from GNSS fix speed/drift over a 30s window
 - **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll

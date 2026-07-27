@@ -39,10 +39,10 @@ class DependencyInjectionTest {
         val service = ElevationService(readingsCount = 2)
         
         val result1 = service.addElevationReading(100.0)
-        assertEquals("First reading should be returned directly", 100.0, result1, 0.001)
-        
-        val result2 = service.addElevationReading(200.0)
-        assertEquals("Second reading should average both", 150.0, result2, 0.001)
+        assertEquals("First reading should be returned directly", 100.0, result1.averageMeters, 0.001)
+
+        val result2 = service.addElevationReading(104.0)
+        assertEquals("Second reading should average both", 102.0, result2.averageMeters, 0.001)
     }
 
     @Test

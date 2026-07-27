@@ -34,7 +34,6 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.loadingindicator.LoadingIndicator
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -65,7 +64,7 @@ class ElevationFragment : Fragment() {
     lateinit var sensorManager: SensorManager
 
     private lateinit var elevationTextView: TextView
-    private lateinit var loadingIndicator: LoadingIndicator
+    private lateinit var stabilityLine: StabilityLineView
     private lateinit var detailsToggle: TextView
     private lateinit var detailsPanel: TextView
     private var useMetricUnit = true
@@ -74,6 +73,15 @@ class ElevationFragment : Fragment() {
     private var searchTimeoutJob: Job? = null
     private var locationOffDialog: AlertDialog? = null
     private val stillnessDetector = StillnessDetector()
+
+    // The averaging window is flushed after gaps (background return, idle
+    // wake); the epoch drops geoid-conversion coroutines launched before a
+    // flush, and awaitingFreshFix keeps the cached number dimmed until the
+    // first post-flush reading lands.
+    private var readingEpoch = 0
+    private var awaitingFreshFix = false
+    private var pausedAtElapsedMs = 0L
+    private var lastDisplayedElevationMeters: Double? = null
 
     // Details panel state
     private var showDetails = false
@@ -119,7 +127,7 @@ class ElevationFragment : Fragment() {
         val view = inflater.inflate(R.layout.fragment_elevation, container, false)
 
         elevationTextView = view.findViewById(R.id.elevation_text_view)
-        loadingIndicator = view.findViewById(R.id.loading_indicator)
+        stabilityLine = view.findViewById(R.id.stability_line)
         detailsToggle = view.findViewById(R.id.details_toggle)
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
@@ -272,8 +280,9 @@ class ElevationFragment : Fragment() {
         }
 
         if (!hasFix) {
-            setLoading(true)
+            showStatusText(getString(R.string.loading_elevation))
         }
+        applyReadingState()
 
         locationListener?.let { listener ->
             try {
@@ -321,15 +330,25 @@ class ElevationFragment : Fragment() {
         ) {
             return
         }
+        val epoch = readingEpoch
         viewLifecycleOwner.lifecycleScope.launch {
             // Geoid data loads from disk on first use in a region
             val elevation = withContext(Dispatchers.IO) {
                 altitudeResolver.mslAltitudeMeters(location)
             }
-            elevationService.addElevationReading(elevation)
+            // The window was flushed while this fix was converting: drop it
+            if (epoch != readingEpoch) return@launch
+            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
+                location.verticalAccuracyMeters
+            } else {
+                ElevationService.DEFAULT_VERTICAL_ACCURACY_M
+            }
+            elevationService.addElevationReading(elevation, verticalAccuracy)
             hasFix = true
+            awaitingFreshFix = false
             lastLocation = location
             updateUIWithElevation()
+            applyReadingState()
             refreshDetails()
         }
     }
@@ -351,6 +370,7 @@ class ElevationFragment : Fragment() {
                 goActive()
             }
             isIdle = true
+            applyReadingState()
             refreshDetails()
         } catch (e: SecurityException) {
             Log.e(TAG, "Lost permission while going idle", e)
@@ -361,8 +381,19 @@ class ElevationFragment : Fragment() {
     private fun goActive() {
         isIdle = false
         stillnessDetector.reset()
+        // The wake fired because the device moved, so the window is stale
+        flushReadings()
         startLocationUpdates()
         refreshDetails()
+    }
+
+    /** Discard the averaging window; the cached number stays on screen, dimmed. */
+    private fun flushReadings() {
+        elevationService.reset()
+        readingEpoch++
+        if (hasFix) {
+            awaitingFreshFix = true
+        }
     }
 
     private fun refreshDetails() {
@@ -440,6 +471,7 @@ class ElevationFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
+        pausedAtElapsedMs = SystemClock.elapsedRealtime()
         requireContext().unregisterReceiver(providersChangedReceiver)
         locationOffDialog?.dismiss()
         locationOffDialog = null
@@ -458,6 +490,13 @@ class ElevationFragment : Fragment() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         if (hasLocationPermission()) {
+            // A long gap away from the app can mean a new elevation: start
+            // the average over rather than walking the stale window there
+            if (pausedAtElapsedMs != 0L &&
+                SystemClock.elapsedRealtime() - pausedAtElapsedMs > RESET_AFTER_GAP_MS
+            ) {
+                flushReadings()
+            }
             stillnessDetector.reset()
             startLocationUpdates()
         }
@@ -466,25 +505,50 @@ class ElevationFragment : Fragment() {
         }
     }
 
-    private fun setLoading(loading: Boolean) {
-        loadingIndicator.isVisible = loading
-        if (loading) {
-            showStatusText(getString(R.string.loading_elevation))
+    /**
+     * Push the derived [ReadingState] to the settling line and the hero
+     * number's opacity. Called whenever any of its inputs change.
+     */
+    private fun applyReadingState() {
+        if (!::stabilityLine.isInitialized) return
+        val state = ReadingState.derive(
+            hasFixEver = hasFix,
+            isIdle = isIdle,
+            awaitingFreshFix = awaitingFreshFix,
+            snapshot = elevationService.snapshot()
+        )
+        stabilityLine.isVisible = true
+        stabilityLine.setState(state)
+        val textAlpha = when (state) {
+            ReadingState.Dormant -> DIMMED_TEXT_ALPHA
+            is ReadingState.Converging -> 0.7f + 0.3f * state.progress
+            else -> 1f
         }
+        elevationTextView.animate().alpha(textAlpha).setDuration(250).start()
+    }
+
+    // Errors get explanatory status text; a kinetic signal widget alongside
+    // would contradict it
+    private fun hideStabilityLine() {
+        if (::stabilityLine.isInitialized) {
+            stabilityLine.isVisible = false
+        }
+        elevationTextView.animate().cancel()
+        elevationTextView.alpha = 1f
     }
 
     private fun showPermissionRequired() {
-        setLoading(false)
+        hideStabilityLine()
         showStatusText(getString(R.string.location_permission_required))
     }
 
     private fun showPreciseLocationRequired() {
-        setLoading(false)
+        hideStabilityLine()
         showStatusText(getString(R.string.precise_location_required))
     }
 
     private fun showLocationOff() {
-        setLoading(false)
+        hideStabilityLine()
         showStatusText(getString(R.string.location_services_off))
 
         if (locationOffDialog?.isShowing == true) return
@@ -516,9 +580,16 @@ class ElevationFragment : Fragment() {
         // No reading yet (e.g. units toggled before the first GPS fix) — keep the loading state
         if (!hasFix) return
 
-        setLoading(false)
+        val averageMeters = elevationService.snapshot().averageMeters
+        if (!averageMeters.isNaN()) {
+            lastDisplayedElevationMeters = averageMeters
+        }
+        // The window can be empty right after a flush; keep showing the
+        // cached value (dimmed via the Dormant state) until fresh fixes land
+        val meters = lastDisplayedElevationMeters ?: return
+
         applyTextAppearance(com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized)
-        val localizedElevation = elevationService.getLocalizedElevation(useMetricUnit)
+        val localizedElevation = if (useMetricUnit) meters else UnitConverter.metersToFeet(meters)
         val elevationRounded = kotlin.math.round(localizedElevation).toInt()
         val unit = getString(if (useMetricUnit) R.string.unit_meters else R.string.unit_feet)
         elevationTextView.text = getString(R.string.elevation_text, elevationRounded, unit)
@@ -535,5 +606,7 @@ class ElevationFragment : Fragment() {
         private const val SEARCH_TIMEOUT_MS = 30_000L
         private const val UPDATE_INTERVAL_MS = 1_000L
         private const val MAX_VERTICAL_ACCURACY_M = 50f
+        private const val RESET_AFTER_GAP_MS = 30_000L
+        private const val DIMMED_TEXT_ALPHA = 0.55f
     }
 }
