@@ -49,6 +49,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         
+      # Must satisfy toolchainVersion AND toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
+      # provisions its own. Changing distribution here requires updating that
+      # file too.
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
@@ -111,6 +115,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         
+      # Must satisfy toolchainVersion AND toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
+      # provisions its own. Changing distribution here requires updating that
+      # file too.
       - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:

@@ -70,7 +70,8 @@ The app uses **Hilt**. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) p
 ## Key Technical Details
 
 - **Compile SDK**: 37, **Target SDK**: 36, **Minimum SDK**: 34 (Android 14)
-- **Toolchain**: Kotlin 2.4.10, AGP 9.3.1, Gradle wrapper 9.6.1, JDK 21 (Temurin, pinned in `.tool-versions`), Java/Kotlin target 17
+- **Toolchain**: Kotlin 2.4.10, AGP 9.3.1, Gradle wrapper 9.6.1, JDK 21 (Temurin), Java/Kotlin target 17
+- **JDK selection**: the Gradle daemon JVM is pinned by Daemon JVM criteria in `gradle/gradle-daemon-jvm.properties` (`toolchainVendor=ADOPTIUM`, `toolchainVersion=21`), so IDE, CLI, and CI builds all run on Temurin 21. `.tool-versions` pins the local install, and CI's three `setup-java` steps must keep `distribution: 'temurin'` to satisfy the vendor pin. Do **not** repin the vendor to `JETBRAINS` — Android Studio's bundled JBR lives inside the app bundle, which Gradle's toolchain auto-detection does not scan, so that pin forces a JDK download on every machine and every CI job. Android Studio still *boots* on its bundled JBR through a separate mechanism (`STUDIO_JDK` / the `jbr` directory); the criteria file has no effect on the IDE runtime. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version` — move those three by hand, together.
 - **Dependency Injection**: Hilt 2.60.1 with KSP 2.3.10
 - **Architecture Components**: Navigation Component, DataStore Preferences
 - **Location**: Uses the platform `LocationManager` with GPS_PROVIDER only — **deliberately no Google Play services / play-services-location dependency**, so the app runs identically on certified and de-googled AOSP devices (GrapheneOS, LineageOS, etc.) and stays F-Droid-eligible. Do not introduce GMS dependencies.
