@@ -2,7 +2,6 @@ package com.bizzarosn.heightmark
 
 import android.Manifest
 import android.hardware.Sensor
-import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.TriggerEvent
@@ -35,9 +34,9 @@ import java.util.concurrent.Executor
  */
 class IdleWakeMonitor(
     private val locationManager: LocationManager,
-    private val sensorManager: SensorManager
+    private val sensorManager: SensorManager,
+    private val pressureDetector: PressureDeltaDetector
 ) {
-    private val pressureDetector = PressureDeltaDetector()
     private var onWake: (() -> Unit)? = null
     private var anchor: Location? = null
 
@@ -114,15 +113,11 @@ class IdleWakeMonitor(
     /** Returns true if a barometer is present and armed. */
     private fun armBarometer(): Boolean {
         val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) ?: return false
-        val listener = object : SensorEventListener {
-            override fun onSensorChanged(event: SensorEvent) {
-                if (pressureDetector.feed(event.values[0])) {
-                    Log.d(TAG, "Sustained pressure change detected")
-                    wake()
-                }
+        val listener = sensorListener { event ->
+            if (pressureDetector.feed(event.values[0])) {
+                Log.d(TAG, "Sustained pressure change detected")
+                wake()
             }
-
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
         val registered = sensorManager.registerListener(
             listener, sensor, PRESSURE_SAMPLING_PERIOD_US

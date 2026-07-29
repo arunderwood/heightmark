@@ -7,6 +7,8 @@ import com.bizzarosn.heightmark.AltitudeResolver
 import com.bizzarosn.heightmark.ElevationService
 import com.bizzarosn.heightmark.IdleWakeMonitor
 import com.bizzarosn.heightmark.PreferencesRepository
+import com.bizzarosn.heightmark.PressureDeltaDetector
+import com.bizzarosn.heightmark.StillnessDetector
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,10 +60,21 @@ object AppModule {
     }
 
     @Provides
+    fun provideStillnessDetector(): StillnessDetector {
+        return StillnessDetector()
+    }
+
+    @Provides
+    fun providePressureDeltaDetector(): PressureDeltaDetector {
+        return PressureDeltaDetector()
+    }
+
+    @Provides
     fun provideIdleWakeMonitor(
         locationManager: LocationManager,
-        sensorManager: SensorManager
+        sensorManager: SensorManager,
+        pressureDetector: PressureDeltaDetector
     ): IdleWakeMonitor {
-        return IdleWakeMonitor(locationManager, sensorManager)
+        return IdleWakeMonitor(locationManager, sensorManager, pressureDetector)
     }
 }

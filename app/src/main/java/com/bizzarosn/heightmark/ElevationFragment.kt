@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.Sensor
-import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.GnssStatus
@@ -61,6 +60,9 @@ class ElevationFragment : Fragment() {
     @Inject
     lateinit var sensorManager: SensorManager
 
+    @Inject
+    lateinit var stillnessDetector: StillnessDetector
+
     private lateinit var elevationTextView: TextView
     private lateinit var stabilityLine: StabilityLineView
     private lateinit var detailsToggle: TextView
@@ -70,7 +72,6 @@ class ElevationFragment : Fragment() {
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
     private var locationOffDialog: AlertDialog? = null
-    private val stillnessDetector = StillnessDetector()
 
     // The averaging window is flushed after gaps (background return, idle
     // wake); the epoch drops geoid-conversion coroutines launched before a
@@ -194,13 +195,7 @@ class ElevationFragment : Fragment() {
 
         if (pressurePanelListener == null) {
             sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sensor ->
-                val listener = object : SensorEventListener {
-                    override fun onSensorChanged(event: SensorEvent) {
-                        lastPressureHpa = event.values[0]
-                    }
-
-                    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-                }
+                val listener = sensorListener { event -> lastPressureHpa = event.values[0] }
                 if (sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)) {
                     pressurePanelListener = listener
                 }
