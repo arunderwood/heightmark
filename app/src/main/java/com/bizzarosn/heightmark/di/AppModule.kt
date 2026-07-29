@@ -18,6 +18,8 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    private const val ELEVATION_WINDOW_SIZE = 10
+
     @Provides
     @Singleton
     fun providePreferencesRepository(
@@ -28,7 +30,7 @@ object AppModule {
 
     @Provides
     fun provideElevationService(): ElevationService {
-        return ElevationService(readingsCount = 10)
+        return ElevationService(readingsCount = ELEVATION_WINDOW_SIZE)
     }
 
     @Provides

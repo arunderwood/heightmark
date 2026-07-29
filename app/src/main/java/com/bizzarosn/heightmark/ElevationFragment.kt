@@ -445,7 +445,7 @@ class ElevationFragment : Fragment() {
                 String.format(Locale.getDefault(), "%.1f", pressure)
             )
         }
-        lines += getString(R.string.detail_readings, elevationService.readingCount())
+        lines += getString(R.string.detail_readings, elevationService.snapshot().readingCount)
 
         detailsPanel.text = lines.joinToString("\n")
     }

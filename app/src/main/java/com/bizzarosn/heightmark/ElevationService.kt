@@ -106,8 +106,6 @@ class ElevationService(private val readingsCount: Int) {
         return window.map { it.elevationMeters }.average()
     }
 
-    fun readingCount(): Int = window.size
-
     companion object {
         const val DEFAULT_VERTICAL_ACCURACY_M = 10f
         const val JUMP_CONFIRM_COUNT = 3
