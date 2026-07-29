@@ -80,8 +80,10 @@ jobs:
       - name: Run lint, tests, and build in parallel
         id: build
         run: |
-          # Run lint and unit tests in parallel, then build
-          ./gradlew lintDebug testDebugUnitTest assembleDebug --parallel --build-cache
+          # assembleRelease is the PR gate on R8 and resource shrinking, which no
+          # debug task exercises. This job has no signing secrets, so the release
+          # APK it produces is unsigned and is never uploaded.
+          ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease --parallel --build-cache
           echo "apk-path=app/build/outputs/apk/debug/*.apk" >> $GITHUB_OUTPUT
         
       - name: Publish Unit Test Results

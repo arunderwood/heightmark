@@ -12,21 +12,14 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
--keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
+# Attributes that keep release stack traces readable, while still obfuscating
+# the original source file name.
+-keepattributes Exceptions,InnerClasses,Signature,Deprecated,SourceFile,LineNumberTable,*Annotation*,EnclosingMethod
 -renamesourcefileattribute SourceFile
 
-# Keep crash reporting attributes
--keepattributes Exceptions,InnerClasses,Signature,Deprecated,SourceFile,LineNumberTable,*Annotation*,EnclosingMethod
-
-# Keep all classes that might be referenced by navigation component
--keep class androidx.navigation.** { *; }
--keep class com.bizzarosn.heightmark.** { *; }
-
-# Keep location and sensor related classes
--keep class android.location.** { *; }
--keep class android.hardware.** { *; }
+# The app needs no keep rules of its own: it uses no reflection or dynamic class
+# loading, Hilt and Navigation ship consumer rules, and AGP generates keep rules
+# for the classes named in the manifest and in XML resources (ElevationFragment,
+# StabilityLineView). Keep anything added here narrow — a package-wide
+# `-keep class com.bizzarosn.heightmark.** { *; }` opts the entire app out of
+# minification, which costs ~450 KB in the release APK.

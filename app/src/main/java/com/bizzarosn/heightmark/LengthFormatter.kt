@@ -12,7 +12,7 @@ import kotlin.math.round
 object LengthFormatter {
 
     /** Template + formatted value for a detail row ("112.4 m" / "369 ft"). */
-    data class Detail(@StringRes val templateRes: Int, val valueText: String)
+    data class Detail(@param:StringRes val templateRes: Int, val valueText: String)
 
     fun detail(meters: Double, useMetric: Boolean, locale: Locale): Detail {
         return if (useMetric) {

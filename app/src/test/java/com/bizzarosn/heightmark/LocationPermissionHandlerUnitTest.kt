@@ -8,17 +8,12 @@ class LocationPermissionHandlerUnitTest {
 
     @Test
     fun `permission state objects are correctly typed`() {
-        // Verify sealed class hierarchy and object equality
-        val granted = LocationPermissionState.Granted
-        val coarseOnly = LocationPermissionState.CoarseOnly
-        val permanentlyDenied = LocationPermissionState.PermanentlyDenied
-        val requiresRationale = LocationPermissionState.RequiresRationale
-
-        // Verify all are instances of the sealed class
-        assertTrue("Granted should be LocationPermissionState", granted is LocationPermissionState)
-        assertTrue("CoarseOnly should be LocationPermissionState", coarseOnly is LocationPermissionState)
-        assertTrue("PermanentlyDenied should be LocationPermissionState", permanentlyDenied is LocationPermissionState)
-        assertTrue("RequiresRationale should be LocationPermissionState", requiresRationale is LocationPermissionState)
+        // The explicit supertype is the assertion: if a state ever leaves the
+        // sealed hierarchy, these declarations stop compiling.
+        val granted: LocationPermissionState = LocationPermissionState.Granted
+        val coarseOnly: LocationPermissionState = LocationPermissionState.CoarseOnly
+        val permanentlyDenied: LocationPermissionState = LocationPermissionState.PermanentlyDenied
+        val requiresRationale: LocationPermissionState = LocationPermissionState.RequiresRationale
 
         // Verify different states are not equal
         assertNotEquals("Different states should not be equal", granted, coarseOnly)
