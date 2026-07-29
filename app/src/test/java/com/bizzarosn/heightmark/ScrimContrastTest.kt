@@ -12,28 +12,26 @@ import kotlin.math.pow
  * illustration.
  *
  * The runtime accessibility checks (ATF via the test runner) measure contrast
- * on emulator screenshots, but nothing there pins the *worst case*: the palest
- * region of the day illustration under the thinnest part of the scrim. This
- * test does that with pure math, so "lighten the scrim a touch" or "dim the
- * text a bit more" fails fast on the JVM with the computed ratio in the
- * message.
+ * on emulator screenshots, but nothing there pins the *worst case*. This test
+ * does it with pure math, so "lighten the scrim a touch" or "dim the text a
+ * bit more" fails fast on the JVM with the computed ratio in the message.
  *
  * Color values are parsed from the resource files and alpha constants are
- * referenced from production code — the only test-local constant is the
- * measured backdrop swatch.
+ * referenced from production code.
  */
 class ScrimContrastTest {
 
     /**
-     * Palest color in the lower third of drawable-nodpi/background.webp (the
-     * day illustration's mist band, where the scrim is thinnest relative to
-     * the artwork). Manual step: re-measure this swatch if the day artwork
-     * ever changes.
+     * Pure white: the brightest backdrop any artwork can produce beneath the
+     * scrim. Both illustrations really do reach it (the day mist band and the
+     * night horizon glow), and using the absolute bound makes these
+     * guarantees hold for BOTH themes and for any future artwork swap —
+     * nothing needs re-measuring when the images change.
      */
-    private val worstCaseDayBackdrop = Rgb(0xF0 / 255.0, 0xF9 / 255.0, 0xF2 / 255.0)
+    private val worstCaseBackdrop = Rgb(1.0, 1.0, 1.0)
 
-    /** Backdrop every on-image element sits on: the scrim floor over the pale artwork. */
-    private val scrimmedBackdrop = resourceColor("hm_scrim_floor").over(worstCaseDayBackdrop)
+    /** Backdrop every on-image element sits on: the scrim floor over the artwork. */
+    private val scrimmedBackdrop = resourceColor("hm_scrim_floor").over(worstCaseBackdrop)
 
     private val white = resourceColor("hm_on_scrim").over(scrimmedBackdrop)
 
@@ -99,7 +97,7 @@ class ScrimContrastTest {
 
     private fun assertAtLeast(threshold: Double, ratio: Double, subject: String) {
         assertTrue(
-            "$subject contrast is %.2f:1 over the day-mode worst case; WCAG requires $threshold:1"
+            "$subject contrast is %.2f:1 over the worst-case (pure white) backdrop; WCAG requires $threshold:1"
                 .format(ratio),
             ratio >= threshold
         )
