@@ -13,6 +13,9 @@ app/release/*
 .gradle/
 build/
 
+# Kotlin compiler session files
+.kotlin/
+
 # Local configuration file (sdk path, etc)
 local.properties
 
