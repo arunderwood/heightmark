@@ -9,20 +9,27 @@ HeightMark is a simple Android app that displays the user's current elevation/al
 ## Build Commands
 
 ```bash
-# Build the project
+# Build the project (unit tests + lint + APKs)
 ./gradlew build
 
 # Build debug APK
 ./gradlew assembleDebug
 
-# Build release APK
-./gradlew assembleRelease
-
-# Run tests
+# Run unit tests
 ./gradlew test
+
+# Run a single unit test class (append .methodName for one method;
+# most test methods use backtick names, so quote them)
+./gradlew testDebugUnitTest --tests "com.bizzarosn.heightmark.ElevationServiceTest"
 
 # Run instrumented tests (requires connected device/emulator)
 ./gradlew connectedAndroidTest
+
+# Run a single instrumented test class
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.bizzarosn.heightmark.StartupCrashTest
+
+# Lint (Accessibility category is promoted to error severity — see app/lint.xml)
+./gradlew lintDebug
 
 # Clean build
 ./gradlew clean
@@ -30,53 +37,56 @@ HeightMark is a simple Android app that displays the user's current elevation/al
 
 ## Architecture
 
-The app follows a simple Android architecture with these key components:
+The app is a single screen (`ElevationFragment`) plus a set of focused collaborator classes:
 
-- **HeightMarkApplication**: Application class annotated with `@HiltAndroidApp` for dependency injection
-- **MainActivity**: Entry point with navigation setup using Navigation Component (annotated with `@AndroidEntryPoint`)
-- **ElevationFragment**: Main UI fragment that handles location permissions and displays elevation (uses `@Inject` for dependencies)
+- **HeightMarkApplication**: `@HiltAndroidApp` Application; applies Material `DynamicColors` to all activities
+- **MainActivity**: `@AndroidEntryPoint` entry point; splash screen (`installSplashScreen`), `enableEdgeToEdge`, Navigation Component with a single-destination `BottomNavigationView`
+- **ElevationFragment**: The whole app's UI and orchestration — owns the GPS lifecycle, permission handling, stillness/idle duty-cycling, epoch-guarded MSL conversion, unit toggle, details panel, and reading-state → UI mapping
 - **ElevationService**: Rolling average of elevation readings with jump re-anchoring — sustained same-side outliers (elevator, stairs) flush and re-seed the window so the display snaps to the new level; exposes a `Snapshot` with window fill progress and a latched `settled` flag
-- **ReadingState**: Sealed state (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; drives the settling line and the hero number's opacity
+- **ReadingState**: Sealed interface (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; drives the settling line and the hero number's opacity
 - **StabilityLineView**: The "settling line" — a canvas-drawn kinetic line under the elevation number: traveling wave while acquiring, flattening/brightening core while converging, breathing glow when stable, motionless dotted line (with dimmed number) when the reading is dormant/stale
-- **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data)
+- **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data); falls back to ellipsoid height if geoid data fails to load
 - **StillnessDetector**: Declares the device stationary from GNSS fix speed/drift over a 30s window
-- **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll
+- **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll (barometer-less devices only)
 - **PressureDeltaDetector**: Sustained-pressure-change detection with weather-drift absorption and HVAC/door-transient rejection
-- **LocationPermissionHandler**: Robust permission handler with state management and lifecycle awareness, including the Android 12+ coarse-only ("approximate") grant state
+- **LocationPermissionHandler**: Lifecycle-aware permission handler with state management, including the Android 12+ coarse-only ("approximate") grant state
 - **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel)
+- **UnitConverter**: `object` holding `FEET_PER_METER` and `metersToFeet()`
 
 ### Dependency Injection
 
-The app uses **Hilt** for dependency injection:
-- **AppModule** (`di/AppModule.kt`): Defines dependency providers
-  - `PreferencesRepository`: Singleton scope
-  - `ElevationService`: Factory scope (new instance per injection)
-  - `LocationManager`: Singleton scope
-- **@AndroidEntryPoint**: Applied to `MainActivity` and `ElevationFragment` to enable injection
-- **@Inject**: Used in fragments to inject dependencies automatically
-- **Benefits**: Improved testability, cleaner code, centralized dependency management
+The app uses **Hilt**. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) provides:
+- Singletons: `PreferencesRepository`, `LocationManager`, `AltitudeResolver`, `SensorManager`
+- Unscoped (new instance per injection): `ElevationService(readingsCount = 10)`, `IdleWakeMonitor`
+
+`@AndroidEntryPoint` is applied to `MainActivity` and `ElevationFragment`; the fragment `@Inject`s all six of the above. `StillnessDetector` and `LocationPermissionHandler` are constructed directly in the fragment, not injected.
 
 ### Permission Handling
 
-The app uses a sophisticated permission handling system:
-- **LocationPermissionState**: Sealed class defining permission states (Granted, CoarseOnly, Denied, PermanentlyDenied, RequiresRationale)
+- **LocationPermissionState**: Sealed class with states Granted, CoarseOnly, PermanentlyDenied, RequiresRationale
 - **Lifecycle-aware**: Automatically cleans up dialogs and resources when fragment is destroyed
-- **Multiple permissions**: Handles both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION
-- **Proper state management**: Clear separation between permission states and UI responses
+- **Multiple permissions**: Handles both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; coarse-only grants get an in-context precise-location upgrade prompt because GPS requires fine
 
 ## Key Technical Details
 
-- **Compile SDK**: 37
-- **Target SDK**: 36
-- **Minimum SDK**: 34 (Android 14)
-- **Language**: Kotlin 2.2.20
-- **Architecture Components**: Navigation Component, DataStore Preferences, Hilt 2.57.2
-- **Dependency Injection**: Hilt with KSP 2.2.20-2.0.3 (Kotlin Symbol Processing)
+- **Compile SDK**: 37, **Target SDK**: 36, **Minimum SDK**: 34 (Android 14)
+- **Toolchain**: Kotlin 2.4.10, AGP 9.3.1, Gradle wrapper 9.6.1, JDK 21 (Temurin, pinned in `.tool-versions`), Java/Kotlin target 17
+- **Dependency Injection**: Hilt 2.60.1 with KSP 2.3.10
+- **Architecture Components**: Navigation Component, DataStore Preferences
 - **Location**: Uses the platform `LocationManager` with GPS_PROVIDER only — **deliberately no Google Play services / play-services-location dependency**, so the app runs identically on certified and de-googled AOSP devices (GrapheneOS, LineageOS, etc.) and stays F-Droid-eligible. Do not introduce GMS dependencies.
 - **Altitude**: Every fix is converted from WGS84 ellipsoid height to Mean Sea Level via the platform `AltitudeConverter`; fixes without altitude or with vertical accuracy worse than 50 m are excluded from the rolling average
 - **Power**: GPS duty-cycles off after ~30 s stationary; wake triggers are significant motion, barometer delta (vertical movement), passive-provider fixes, and a 3-minute fallback poll on barometer-less devices
-- **Permissions**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; coarse-only ("approximate") grants get an in-context precise-location upgrade prompt because GPS requires fine
-- **Dependencies**: Uses version catalog (gradle/libs.versions.toml) for dependency management
+- **Permissions/Manifest**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; declares `<uses-feature android.hardware.location.gps required="true"/>` (affects Play Store device filtering)
+- **Build variants**: Debug builds use applicationId suffix `.debug` and versionName suffix `-debug`, so debug and release installs coexist
+- **Dependencies**: Managed via version catalog (`gradle/libs.versions.toml`)
+
+## Accessibility Gates
+
+Accessibility is enforced at three layers; all of them fail the build/CI on violation:
+
+1. **Lint**: `app/lint.xml` promotes the entire `Accessibility` lint category to `error`, and `lint { abortOnError = true }` in `app/build.gradle.kts`
+2. **Runtime checks**: the custom `HiltTestRunner` globally enables Accessibility Test Framework checks from the root view, so **every Espresso interaction** in every instrumented test validates the full view hierarchy
+3. **Contrast tests**: `ScrimContrastTest` (unit test) computes WCAG 2.1 contrast ratios from constants referenced directly in production source (`ElevationFragment.DIMMED_TEXT_ALPHA`, `StabilityLineView` alpha constants, `hm_*` color resources). Changing those constants or colors can fail unit tests — that is by design.
 
 ## Release Process
 
@@ -85,183 +95,68 @@ The app uses a sophisticated permission handling system:
 Every merge to `main` automatically creates a new release if all quality checks pass.
 
 **Flow:**
-1. Developer creates PR → `android_build.yml` runs full quality checks
-2. PR merged to main → `android_build.yml` re-runs on main
-3. If all checks pass → `release.yml` automatically triggers
-4. Release workflow:
-   - Calculates version based on workflow run number
-   - Builds signed AAB
-   - Uploads to Play Store internal track
-   - Creates GitHub release with auto-generated notes
+1. PR merged to main → `android_build.yml` ("Android CI") re-runs on main
+2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** on main (not on push directly)
+3. Release workflow: calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and creates a GitHub release with auto-generated notes. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
+
+Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars (populated from secrets in CI); if any is missing the signing config is left empty and local `assembleRelease`/`bundleRelease` output is unsigned.
 
 ### Version Numbering
 
-**versionCode (Play Store):** Monotonically increasing integer
-- Formula: `10000 + workflow_run_number`
-- Example: Run #7 → versionCode = 10007
-- Always increases, never decreases (Play Store requirement)
+- **versionCode** (Play Store, must always increase): `BASE_CODE + run_number` with `BASE_CODE=10000`
+- **versionName** (user-visible): `VERSION_PREFIX.run_number` with `VERSION_PREFIX="1.0"`
+- Both are defined in `.github/workflows/release.yml`; `run_number` is the release workflow's own run counter
+- Local builds fall back to `versionCode 4` / `versionName "1.0.0-dev"` unless overridden:
 
-**versionName (User-visible):** Human-readable version string
-- Format: `MAJOR.MINOR.PATCH`
-- Example: Run #7 → versionName = "1.0.7"
-- PATCH auto-increments with each release
-
-**Current version:** Based on workflow run number (currently at run #6)
-- Next release will be: v1.0.7 (versionCode 10007)
-
-### Bumping Major/Minor Versions
-
-When you want to release a new major or minor version (e.g., v1.1.0 or v2.0.0):
-
-**Edit `.github/workflows/release.yml`:**
-```yaml
-# For v1.1.x releases
-VERSION_PREFIX="1.1"
-BASE_CODE=11000
-
-# For v2.0.x releases
-VERSION_PREFIX="2.0"
-BASE_CODE=20000
-```
-
-Then next release will be v1.1.7 or v2.0.7 (depending on current run_number).
-
-### Manual Version Override
-
-For local testing or manual releases:
 ```bash
-./gradlew bundleRelease \
-  -PversionName=1.0.999 \
-  -PversionCode=10999
+./gradlew bundleRelease -PversionName=1.0.999 -PversionCode=10999
 ```
 
-### Rollback Strategy
+To bump major/minor (e.g. v1.1.x or v2.0.x), edit `VERSION_PREFIX` and `BASE_CODE` in `release.yml` (e.g. `"1.1"` / `11000`).
 
-If a release has issues:
-```bash
-# Revert the problematic commit
-git revert <commit-sha>
-git push origin main
+### Rollback
 
-# Or revert a merge
-git revert -m 1 <merge-commit-sha>
-git push origin main
-```
-
-A new release is automatically created with the fix.
-
-### Quality Gates
-
-All releases must pass:
-- ✅ Security scan (Trivy)
-- ✅ Lint checks
-- ✅ Unit tests
-- ✅ Instrumented tests (Android emulator)
-
-Releases only happen if ALL checks pass.
+Revert the problematic commit on main (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a merge) and push — a new release is created automatically with the fix.
 
 ## Testing
 
-The project includes comprehensive testing strategy:
-
 ### Unit Tests (`app/src/test/`)
-- Basic logic testing
-- ElevationService unit conversion tests
-- Business logic validation
+
+Pure-JVM tests covering the core logic: `ElevationServiceTest` (rolling average, jump re-anchoring, settled latching), `AltitudeResolverTest` (MSL conversion + ellipsoid fallbacks, mocked `AltitudeConverter`), `StillnessDetectorTest`, `PressureDeltaDetectorTest`, `ReadingStateTest` (state derivation precedence), `ScrimContrastTest` (WCAG contrast — see Accessibility Gates), `UnitConverterTest`, `LocationPermissionHandlerUnitTest`, `PreferencesRepositoryUnitTest`, `DependencyInjectionTest`.
 
 ### Instrumented Tests (`app/src/androidTest/`)
-- **ElevationFragmentTest**: UI interactions and component integration
-- **LocationPermissionTest**: Permission flow testing with different scenarios
-- **StartupCrashTest**: Crash detection and component initialization validation
 
-### Test Commands
-```bash
-# Run unit tests only (fast)
-./gradlew test
+- **HiltTestRunner**: custom runner — swaps in `HiltTestApplication` and enables global ATF accessibility checks
+- **AccessibilityChecksTest**: drives interactive states in both day and night uiMode so ATF validates each
+- **ElevationFragmentTest**: UI interactions and component integration (fine+coarse granted)
+- **LocationPermissionTest**: three classes in one file (`LocationPermissionTest`, `CoarseLocationPermissionTest`, `BothLocationPermissionsTest`) covering the different grant combinations
+- **StartupCrashTest**: crash detection and component initialization validation
 
-# Run instrumented tests (requires device/emulator)
-./gradlew connectedAndroidTest
+All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering matters — `HiltAndroidRule` must be first (`order = 0`), `GrantPermissionRule` after it.
 
-# Run all tests (unit + build + lint)
-./gradlew build
-```
+### CI (`.github/workflows/android_build.yml`)
 
-### Test Dependencies
-- `androidx.test.rules`: For permission testing rules
-- `androidx.test.runner`: For instrumented test runner
-- `androidx.test.espresso.core`: For UI testing
-- `androidx.test.ext.junit`: For JUnit extensions
-- `hilt-android-testing`: For Hilt dependency injection in tests
+Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). Three jobs:
 
-### Hilt Testing
-All instrumented tests use Hilt for dependency injection:
-- **@HiltAndroidTest**: Applied to all test classes requiring Hilt
-- **HiltAndroidRule**: Manages Hilt components in tests
-- Tests inject dependencies via `@Inject` just like production code
-- Rule ordering is important: HiltAndroidRule must be first (order = 0)
+1. **security**: Trivy filesystem scan → SARIF upload (runs immediately, parallel with build)
+2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; Gradle cache write access
+3. **instrumented-tests** (needs build-and-test): emulator tests on API 35 (google_apis, x86_64) with KVM, AVD snapshot caching, and read-only Gradle cache (avoids conflicts with job 2)
 
-### CI Testing
-GitHub Actions runs comprehensive quality checks with optimized job dependencies:
+Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`.
 
-**Job Pipeline (Optimized for Speed):**
-1. **security**: Trivy vulnerability scanning (runs immediately, parallel)
-2. **build-and-test**: Combined lint + unit tests + APK build (single job for efficiency)
-3. **instrumented-tests**: Android emulator tests (depends on build-and-test)
+### Quality Gates
 
-**Performance Optimizations:**
-- **Combined jobs**: Merged lint, unit tests, and build into single job to eliminate setup overhead
-- **Maximum parallelization**: Security scan runs immediately without dependencies
-- **Gradle optimizations**:
-  - `--parallel` enables multi-module parallel builds
-  - `--build-cache` caches intermediate build outputs
-  - `gradle.workers.max=4` uses all available CPU cores
-  - `kotlin.incremental=false` avoids incremental compilation overhead in CI
-  - `--configuration-cache` for faster Gradle configuration phase (Gradle 8.14+)
-  - 4GB JVM heap for Gradle daemon, 2GB for Kotlin compiler
-  - Configuration on demand for faster project configuration
-  - Parallel test execution with `maxParallelForks` equal to CPU cores
-- **Advanced caching**:
-  - Gradle build cache with read/write optimization
-    - `build-and-test` job: write access for cache population
-    - `instrumented-tests` job: read-only to avoid cache conflicts
-  - Android SDK caching to avoid repeated SDK downloads
-  - AVD caching with version-specific keys
+All releases must pass: security scan (Trivy), lint (including accessibility-as-error), unit tests, and instrumented tests. Releases only happen if ALL checks pass.
 
 ### GitHub Workflow Testing
 
-**Always validate workflow changes using `act` before committing:**
+Validate workflow changes with `act` before committing:
 
 ```bash
-# Install act (if not already installed)
-brew install act
-
-# List available workflows and jobs
-act --list
-
-# Test specific job (dry run)
+brew install act              # if not already installed
+act --list                    # list workflows and jobs
 act push -j build-and-test --container-architecture linux/amd64 --dryrun
-
-# Full local test run (requires Docker)
-act push -j build-and-test --container-architecture linux/amd64
-
-# Test with environment variables
-act push -j build-and-test --env GITHUB_TOKEN=fake_token --artifact-server-path /tmp/artifacts
+act push -j build-and-test --container-architecture linux/amd64   # full run (requires Docker)
 ```
 
-**Validation steps to perform:**
-1. **YAML syntax validation**: Ensure workflow file parses correctly
-2. **Job configuration**: Verify jobs, steps, and dependencies are properly defined
-3. **Action references**: Confirm community actions exist and versions are correct
-4. **File paths**: Validate that expected artifacts (test results, lint reports) are generated
-5. **Permissions**: Ensure required permissions are granted for actions to function
-
-**Note**: Use `--container-architecture linux/amd64` on Apple M-series chips to avoid compatibility issues.
-
-## Key Features
-
-- Real-time elevation display using GPS
-- Averaging of multiple elevation readings for accuracy
-- Metric/Imperial unit switching with persistent preferences
-- Location permission handling with proper rationale dialogs
-- Loading animation while acquiring GPS fix
-- Material Design theming with dark mode support
+Use `--container-architecture linux/amd64` on Apple M-series chips to avoid compatibility issues.

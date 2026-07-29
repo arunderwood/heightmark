@@ -99,14 +99,13 @@ class ElevationFragmentTest {
     @Test
     fun elevationServiceUnitConversion() {
         val elevationService = ElevationService(1)
-        elevationService.addElevationReading(100.0) // 100 meters
-        
+        val snapshot = elevationService.addElevationReading(100.0) // 100 meters
+
         // Test metric (meters)
-        val metric = elevationService.getLocalizedElevation(true)
-        assert(metric == 100.0)
-        
+        assert(snapshot.averageMeters == 100.0)
+
         // Test imperial (feet) - 100m * 3.28084 ≈ 328.084
-        val imperial = elevationService.getLocalizedElevation(false)
+        val imperial = UnitConverter.metersToFeet(snapshot.averageMeters)
         assert(imperial > 328.0 && imperial < 329.0)
     }
 }

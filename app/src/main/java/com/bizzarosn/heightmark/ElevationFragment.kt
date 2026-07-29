@@ -241,7 +241,6 @@ class ElevationFragment : Fragment() {
                 stopLocationUpdates()
                 showPreciseLocationRequired()
             }
-            is LocationPermissionState.Denied,
             is LocationPermissionState.PermanentlyDenied -> {
                 stopLocationUpdates()
                 showPermissionRequired()

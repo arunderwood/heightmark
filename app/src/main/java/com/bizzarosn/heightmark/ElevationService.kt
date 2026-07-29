@@ -106,11 +106,6 @@ class ElevationService(private val readingsCount: Int) {
         return window.map { it.elevationMeters }.average()
     }
 
-    fun getLocalizedElevation(useMetric: Boolean): Double {
-        val averageElevation = getAverageElevation()
-        return if (useMetric) averageElevation else UnitConverter.metersToFeet(averageElevation)
-    }
-
     fun readingCount(): Int = window.size
 
     companion object {
