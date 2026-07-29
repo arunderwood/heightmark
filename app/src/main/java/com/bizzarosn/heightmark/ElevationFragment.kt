@@ -499,10 +499,12 @@ class ElevationFragment : Fragment() {
         )
         stabilityLine.isVisible = true
         stabilityLine.setState(state)
+        // Exhaustive so a new ReadingState is a compile error here, not a
+        // silently full-opacity fallthrough
         val textAlpha = when (state) {
             ReadingState.Dormant -> DIMMED_TEXT_ALPHA
             is ReadingState.Converging -> 0.7f + 0.3f * state.progress
-            else -> 1f
+            ReadingState.Acquiring, ReadingState.Stable -> 1f
         }
         elevationTextView.animate().alpha(textAlpha).setDuration(HERO_FADE_MS).start()
     }
