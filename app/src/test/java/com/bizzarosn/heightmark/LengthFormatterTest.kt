@@ -30,7 +30,10 @@ class LengthFormatterTest {
     @Test
     fun `metric hero value rounds to the nearest meter`() {
         assertEquals(112, LengthFormatter.heroValue(112.44, useMetric = true))
-        assertEquals(113, LengthFormatter.heroValue(112.5, useMetric = true))
+        assertEquals(113, LengthFormatter.heroValue(112.51, useMetric = true))
+        // kotlin.math.round is half-to-even (rint): a .5 tie goes to the even neighbor
+        assertEquals(112, LengthFormatter.heroValue(112.5, useMetric = true))
+        assertEquals(114, LengthFormatter.heroValue(113.5, useMetric = true))
     }
 
     @Test
