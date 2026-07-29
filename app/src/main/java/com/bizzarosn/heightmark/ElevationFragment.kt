@@ -430,8 +430,8 @@ class ElevationFragment : Fragment() {
             lines += getString(R.string.detail_accuracy, verticalAccuracy, horizontalAccuracy)
             lines += getString(
                 R.string.detail_position,
-                String.format(Locale.getDefault(), "%.5f", location.latitude),
-                String.format(Locale.getDefault(), "%.5f", location.longitude)
+                location.latitude.fmt(5),
+                location.longitude.fmt(5)
             )
             val fixAgeSeconds =
                 (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000
@@ -440,10 +440,7 @@ class ElevationFragment : Fragment() {
 
         lines += getString(R.string.detail_satellites, satellitesUsed, satellitesVisible)
         lastPressureHpa?.let { pressure ->
-            lines += getString(
-                R.string.detail_pressure,
-                String.format(Locale.getDefault(), "%.1f", pressure)
-            )
+            lines += getString(R.string.detail_pressure, pressure.toDouble().fmt(1))
         }
         lines += getString(R.string.detail_readings, elevationService.snapshot().readingCount)
 
@@ -451,15 +448,12 @@ class ElevationFragment : Fragment() {
     }
 
     private fun formatLength(meters: Double): String {
-        return if (useMetricUnit) {
-            getString(R.string.value_meters, String.format(Locale.getDefault(), "%.1f", meters))
-        } else {
-            getString(
-                R.string.value_feet,
-                String.format(Locale.getDefault(), "%.0f", UnitConverter.metersToFeet(meters))
-            )
-        }
+        val detail = LengthFormatter.detail(meters, useMetricUnit, Locale.getDefault())
+        return getString(detail.templateRes, detail.valueText)
     }
+
+    private fun Double.fmt(decimals: Int): String =
+        String.format(Locale.getDefault(), "%.${decimals}f", this)
 
     private fun stopLocationUpdates() {
         idleWakeMonitor.stop()
@@ -525,7 +519,7 @@ class ElevationFragment : Fragment() {
             is ReadingState.Converging -> 0.7f + 0.3f * state.progress
             else -> 1f
         }
-        elevationTextView.animate().alpha(textAlpha).setDuration(250).start()
+        elevationTextView.animate().alpha(textAlpha).setDuration(HERO_FADE_MS).start()
     }
 
     // Errors get explanatory status text; a kinetic signal widget alongside
@@ -564,16 +558,51 @@ class ElevationFragment : Fragment() {
         locationOffDialog?.show()
     }
 
-    // Status messages use headline type; the hero display size is reserved for the value
+    /** The hero TextView's two mutually exclusive configurations. */
+    private sealed interface HeroMode {
+        data class Status(val text: String) : HeroMode
+        data class Value(val meters: Double) : HeroMode
+    }
+
     private fun showStatusText(text: String) {
-        applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
-        // Status sentences run long ("Still searching…") and must not clip
-        elevationTextView.maxLines = 3
-        // Errors and search-status changes are the moments a screen-reader
-        // user must hear unprompted; the ticking elevation number is not
-        elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
-        elevationTextView.contentDescription = null
-        elevationTextView.text = text
+        renderHero(HeroMode.Status(text))
+    }
+
+    /**
+     * The only writer of the hero TextView. Both modes set the same
+     * properties so switching modes can never leave a stale one behind.
+     */
+    private fun renderHero(mode: HeroMode) {
+        when (mode) {
+            is HeroMode.Status -> {
+                // Status messages use headline type; the hero display size is
+                // reserved for the value
+                applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
+                // Status sentences run long ("Still searching…") and must not clip
+                elevationTextView.maxLines = 3
+                // Errors and search-status changes are the moments a screen-reader
+                // user must hear unprompted; the ticking elevation number is not
+                elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                elevationTextView.contentDescription = null
+                elevationTextView.text = mode.text
+            }
+            is HeroMode.Value -> {
+                applyTextAppearance(
+                    com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized
+                )
+                elevationTextView.maxLines = 2
+                // The value refreshes ~every second while converging; a live region
+                // would make TalkBack announce every tick. Screen-reader users read
+                // the value on focus instead, with the unit spoken in full.
+                elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
+                val rounded = LengthFormatter.heroValue(mode.meters, useMetricUnit)
+                val unit = getString(LengthFormatter.unitRes(useMetricUnit))
+                elevationTextView.text = getString(R.string.elevation_text, rounded, unit)
+                val spokenUnit = getString(LengthFormatter.spokenUnitRes(useMetricUnit))
+                elevationTextView.contentDescription =
+                    getString(R.string.elevation_a11y, rounded, spokenUnit)
+            }
+        }
     }
 
     private fun applyTextAppearance(textAppearanceAttr: Int) {
@@ -595,21 +624,7 @@ class ElevationFragment : Fragment() {
         // cached value (dimmed via the Dormant state) until fresh fixes land
         val meters = lastDisplayedElevationMeters ?: return
 
-        applyTextAppearance(com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized)
-        elevationTextView.maxLines = 2
-        // The value refreshes ~every second while converging; a live region
-        // would make TalkBack announce every tick. Screen-reader users read
-        // the value on focus instead, with the unit spoken in full.
-        elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
-        val localizedElevation = if (useMetricUnit) meters else UnitConverter.metersToFeet(meters)
-        val elevationRounded = kotlin.math.round(localizedElevation).toInt()
-        val unit = getString(if (useMetricUnit) R.string.unit_meters else R.string.unit_feet)
-        elevationTextView.text = getString(R.string.elevation_text, elevationRounded, unit)
-        val spokenUnit = getString(
-            if (useMetricUnit) R.string.unit_meters_spoken else R.string.unit_feet_spoken
-        )
-        elevationTextView.contentDescription =
-            getString(R.string.elevation_a11y, elevationRounded, spokenUnit)
+        renderHero(HeroMode.Value(meters))
     }
 
     override fun onDestroy() {
@@ -624,6 +639,7 @@ class ElevationFragment : Fragment() {
         private const val UPDATE_INTERVAL_MS = 1_000L
         private const val MAX_VERTICAL_ACCURACY_M = 50f
         private const val RESET_AFTER_GAP_MS = 30_000L
+        private const val HERO_FADE_MS = 250L
 
         // 0.7 keeps the dimmed (large-text) hero >= 3:1 over the scrim floor
         // in day mode; verified by ScrimContrastTest, which references this
