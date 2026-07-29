@@ -18,7 +18,6 @@ sealed class LocationPermissionState {
 
     /** Only approximate location granted (Android 12+ downgrade); GPS needs precise. */
     object CoarseOnly : LocationPermissionState()
-    object Denied : LocationPermissionState()
     object PermanentlyDenied : LocationPermissionState()
     object RequiresRationale : LocationPermissionState()
 }

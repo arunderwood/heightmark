@@ -10,35 +10,34 @@ class LocationPermissionHandlerUnitTest {
     fun `permission state objects are correctly typed`() {
         // Verify sealed class hierarchy and object equality
         val granted = LocationPermissionState.Granted
-        val denied = LocationPermissionState.Denied
+        val coarseOnly = LocationPermissionState.CoarseOnly
         val permanentlyDenied = LocationPermissionState.PermanentlyDenied
         val requiresRationale = LocationPermissionState.RequiresRationale
 
         // Verify all are instances of the sealed class
         assertTrue("Granted should be LocationPermissionState", granted is LocationPermissionState)
-        assertTrue("Denied should be LocationPermissionState", denied is LocationPermissionState)
+        assertTrue("CoarseOnly should be LocationPermissionState", coarseOnly is LocationPermissionState)
         assertTrue("PermanentlyDenied should be LocationPermissionState", permanentlyDenied is LocationPermissionState)
         assertTrue("RequiresRationale should be LocationPermissionState", requiresRationale is LocationPermissionState)
 
         // Verify different states are not equal
-        assertNotEquals("Different states should not be equal", granted, denied)
-        assertNotEquals("Different states should not be equal", denied, permanentlyDenied)
+        assertNotEquals("Different states should not be equal", granted, coarseOnly)
+        assertNotEquals("Different states should not be equal", coarseOnly, permanentlyDenied)
         assertNotEquals("Different states should not be equal", permanentlyDenied, requiresRationale)
     }
 
     @Test
     fun `permission state when expressions work`() {
         // Verify sealed class works with when statements
-        val testState: LocationPermissionState = LocationPermissionState.Denied
+        val testState: LocationPermissionState = LocationPermissionState.PermanentlyDenied
         val result = when (testState) {
             is LocationPermissionState.Granted -> "access granted"
             is LocationPermissionState.CoarseOnly -> "coarse only"
-            is LocationPermissionState.Denied -> "access denied"
             is LocationPermissionState.PermanentlyDenied -> "permanently denied"
             is LocationPermissionState.RequiresRationale -> "requires rationale"
         }
 
-        assertEquals("When expression should work", "access denied", result)
+        assertEquals("When expression should work", "permanently denied", result)
     }
 
     @Test
@@ -52,8 +51,8 @@ class LocationPermissionHandlerUnitTest {
         assertEquals("Same states should have same hashCode", granted1.hashCode(), granted2.hashCode())
 
         // Different objects should not be equal
-        val denied = LocationPermissionState.Denied
-        assertNotEquals("Different states should not be equal", granted1, denied)
+        val permanentlyDenied = LocationPermissionState.PermanentlyDenied
+        assertNotEquals("Different states should not be equal", granted1, permanentlyDenied)
 
         // Hash codes for equal objects should be equal
         assertEquals("Equal objects should have same hash code", granted1.hashCode(), granted2.hashCode())

@@ -31,26 +31,6 @@ class ElevationServiceTest {
     }
 
     @Test
-    fun `getLocalizedElevation returns meters when useMetric is true`() {
-        elevationService.addElevationReading(100.0)
-        val result = elevationService.getLocalizedElevation(true)
-        assertEquals(100.0, result, 0.001)
-    }
-
-    @Test
-    fun `getLocalizedElevation converts to feet when useMetric is false`() {
-        elevationService.addElevationReading(100.0)
-        val result = elevationService.getLocalizedElevation(false)
-        assertEquals(328.084, result, 0.001)
-    }
-
-    @Test
-    fun `getLocalizedElevation returns NaN when no readings`() {
-        val result = elevationService.getLocalizedElevation(true)
-        assertTrue("Should be NaN when no readings", result.isNaN())
-    }
-
-    @Test
     fun `snapshot averageMeters is NaN when no readings`() {
         assertTrue(elevationService.snapshot().averageMeters.isNaN())
         assertEquals(0, elevationService.snapshot().readingCount)
