@@ -4,10 +4,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <!-- Elevation comes from GNSS; the app is useless without it -->
+    <!-- Elevation comes from GNSS; the app is useless without it. required="true"
+         is load-bearing: it filters the app off GPS-less devices in the Play
+         Store, so UnnecessaryRequiredFeature does not apply here. -->
     <uses-feature
         android:name="android.hardware.location.gps"
-        android:required="true" />
+        android:required="true"
+        tools:ignore="UnnecessaryRequiredFeature" />
 
     <application
         android:name=".HeightMarkApplication"

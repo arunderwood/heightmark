@@ -10,6 +10,7 @@ import android.graphics.Path
 import android.util.AttributeSet
 import android.view.View
 import androidx.annotation.StringRes
+import androidx.core.graphics.withSave
 import android.view.animation.AnimationUtils
 import android.view.animation.LinearInterpolator
 import kotlin.math.PI
@@ -103,7 +104,7 @@ class StabilityLineView @JvmOverloads constructor(
         val amplitude: Float,
         val core: Float,
         val dormantMix: Float,
-        @StringRes val spokenRes: Int
+        @param:StringRes val spokenRes: Int
     )
 
     private fun presentationFor(state: ReadingState): StatePresentation = when (state) {
@@ -198,12 +199,12 @@ class StabilityLineView @JvmOverloads constructor(
                 buildWavePath(inset, width - inset, centerY)
                 wavePaint.setAlphaFraction(WAVE_ALPHA * active)
                 if (coreHalf > 0f) {
-                    canvas.save()
-                    canvas.clipOutRect(
-                        centerX - coreHalf, 0f, centerX + coreHalf, height.toFloat()
-                    )
-                    canvas.drawPath(wavePath, wavePaint)
-                    canvas.restore()
+                    canvas.withSave {
+                        clipOutRect(
+                            centerX - coreHalf, 0f, centerX + coreHalf, height.toFloat()
+                        )
+                        drawPath(wavePath, wavePaint)
+                    }
                 } else {
                     canvas.drawPath(wavePath, wavePaint)
                 }

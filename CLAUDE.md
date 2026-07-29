@@ -70,7 +70,8 @@ The app uses **Hilt**. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) p
 ## Key Technical Details
 
 - **Compile SDK**: 37, **Target SDK**: 36, **Minimum SDK**: 34 (Android 14)
-- **Toolchain**: Kotlin 2.4.10, AGP 9.3.1, Gradle wrapper 9.6.1, JDK 21 (Temurin), Java/Kotlin target 17
+- **Toolchain**: AGP 9.3.1, Gradle wrapper 9.6.1, JDK 21 (Temurin), Java/Kotlin target 17
+- **Kotlin**: compiled through AGP's **built-in Kotlin support** — there is no `org.jetbrains.kotlin.android` plugin and no `kotlin` version in the catalog, so the Kotlin version is whatever KGP the AGP version bundles (2.2.10 for AGP 9.3.1) and moves with AGP. Do not re-add the plugin or the `android.builtInKotlin` / `android.newDsl` opt-outs: applying the standalone plugin makes it call the legacy variant API, and every one of those calls is a deprecation that AGP 10 removes outright. `ksp` is still pinned in the catalog and is bumped by Dependabot independently.
 - **JDK selection**: the Gradle daemon JVM is pinned by Daemon JVM criteria in `gradle/gradle-daemon-jvm.properties` (`toolchainVendor=ADOPTIUM`, `toolchainVersion=21`), so IDE, CLI, and CI builds all run on Temurin 21. `.tool-versions` pins the local install, and CI's three `setup-java` steps must keep `distribution: 'temurin'` to satisfy the vendor pin. Do **not** repin the vendor to `JETBRAINS` — Android Studio's bundled JBR lives inside the app bundle, which Gradle's toolchain auto-detection does not scan, so that pin forces a JDK download on every machine and every CI job. Android Studio still *boots* on its bundled JBR through a separate mechanism (`STUDIO_JDK` / the `jbr` directory); the criteria file has no effect on the IDE runtime. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version` — move those three by hand, together.
 - **Dependency Injection**: Hilt 2.60.1 with KSP 2.3.10
 - **Architecture Components**: Navigation Component, DataStore Preferences
@@ -140,7 +141,7 @@ All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering
 Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). Three jobs:
 
 1. **security**: Trivy filesystem scan → SARIF upload (runs immediately, parallel with build)
-2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; Gradle cache write access
+2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug assembleRelease` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; Gradle cache write access. `assembleRelease` is there so R8 and resource shrinking are exercised on every PR rather than first running in `release.yml`; without signing secrets it produces an unsigned APK that is built but never uploaded
 3. **instrumented-tests** (needs build-and-test): emulator tests on API 35 (google_apis, x86_64) with KVM, AVD snapshot caching, and read-only Gradle cache (avoids conflicts with job 2)
 
 Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`.

@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">HeightMark</string>
     <string name="elevation_text">%1$d %2$s</string>
     <string name="loading_elevation">Fetching elevation…</string>
@@ -40,7 +40,9 @@
     <string name="detail_ellipsoid">Ellipsoid altitude: %1$s</string>
     <string name="detail_geoid_offset">Geoid offset: %1$s</string>
     <string name="detail_accuracy">Accuracy: ±%1$s vertical · ±%2$s horizontal</string>
-    <string name="detail_satellites">Satellites: %1$d used / %2$d visible</string>
+    <!-- Two independent counts. A <plurals> resource selects on a single
+         quantity, so this cannot be expressed as one. -->
+    <string name="detail_satellites" tools:ignore="PluralsCandidate">Satellites: %1$d used / %2$d visible</string>
     <string name="detail_position">Position: %1$s, %2$s</string>
     <string name="detail_fix_age">Last fix: %1$ds ago</string>
     <string name="detail_readings">Readings in average: %1$d</string>

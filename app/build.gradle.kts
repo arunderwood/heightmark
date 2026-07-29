@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.androidApplication)
-    alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.hiltAndroid)
     alias(libs.plugins.ksp)
 }
@@ -89,8 +88,6 @@ android {
         // is promoted to error; abortOnError (the AGP default, made explicit)
         // turns those findings into CI build failures.
         abortOnError = true
-        xmlReport = true
-        htmlReport = true
     }
 }
 
