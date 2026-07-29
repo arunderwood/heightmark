@@ -84,6 +84,14 @@ android {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
     }
+    lint {
+        // Severities live in lint.xml, where the whole Accessibility category
+        // is promoted to error; abortOnError (the AGP default, made explicit)
+        // turns those findings into CI build failures.
+        abortOnError = true
+        xmlReport = true
+        htmlReport = true
+    }
 }
 
 dependencies {
@@ -109,6 +117,8 @@ dependencies {
     
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.espresso.accessibility)
+    androidTestImplementation(libs.accessibility.test.framework)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.runner)
 

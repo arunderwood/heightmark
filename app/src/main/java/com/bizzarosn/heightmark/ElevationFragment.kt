@@ -17,7 +17,6 @@ import android.location.LocationManager
 import android.location.LocationRequest
 import android.os.Bundle
 import android.os.SystemClock
-import android.graphics.Color
 import android.provider.Settings
 import android.util.Log
 import android.util.TypedValue
@@ -163,6 +162,9 @@ class ElevationFragment : Fragment() {
         showDetails = show
         detailsPanel.isVisible = show
         detailsToggle.text = getString(if (show) R.string.details_hide else R.string.details_show)
+        detailsToggle.stateDescription = getString(
+            if (show) R.string.details_state_expanded else R.string.details_state_collapsed
+        )
         if (show) {
             startDetailsSources()
             refreshDetails()
@@ -566,6 +568,12 @@ class ElevationFragment : Fragment() {
     // Status messages use headline type; the hero display size is reserved for the value
     private fun showStatusText(text: String) {
         applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
+        // Status sentences run long ("Still searching…") and must not clip
+        elevationTextView.maxLines = 3
+        // Errors and search-status changes are the moments a screen-reader
+        // user must hear unprompted; the ticking elevation number is not
+        elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        elevationTextView.contentDescription = null
         elevationTextView.text = text
     }
 
@@ -573,7 +581,7 @@ class ElevationFragment : Fragment() {
         val resolved = TypedValue()
         requireContext().theme.resolveAttribute(textAppearanceAttr, resolved, true)
         TextViewCompat.setTextAppearance(elevationTextView, resolved.resourceId)
-        elevationTextView.setTextColor(Color.WHITE)
+        elevationTextView.setTextColor(requireContext().getColor(R.color.hm_on_scrim))
     }
 
     private fun updateUIWithElevation() {
@@ -589,10 +597,20 @@ class ElevationFragment : Fragment() {
         val meters = lastDisplayedElevationMeters ?: return
 
         applyTextAppearance(com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized)
+        elevationTextView.maxLines = 2
+        // The value refreshes ~every second while converging; a live region
+        // would make TalkBack announce every tick. Screen-reader users read
+        // the value on focus instead, with the unit spoken in full.
+        elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
         val localizedElevation = if (useMetricUnit) meters else UnitConverter.metersToFeet(meters)
         val elevationRounded = kotlin.math.round(localizedElevation).toInt()
         val unit = getString(if (useMetricUnit) R.string.unit_meters else R.string.unit_feet)
         elevationTextView.text = getString(R.string.elevation_text, elevationRounded, unit)
+        val spokenUnit = getString(
+            if (useMetricUnit) R.string.unit_meters_spoken else R.string.unit_feet_spoken
+        )
+        elevationTextView.contentDescription =
+            getString(R.string.elevation_a11y, elevationRounded, spokenUnit)
     }
 
     override fun onDestroy() {
@@ -607,6 +625,10 @@ class ElevationFragment : Fragment() {
         private const val UPDATE_INTERVAL_MS = 1_000L
         private const val MAX_VERTICAL_ACCURACY_M = 50f
         private const val RESET_AFTER_GAP_MS = 30_000L
-        private const val DIMMED_TEXT_ALPHA = 0.55f
+
+        // 0.7 keeps the dimmed (large-text) hero >= 3:1 over the scrim floor
+        // in day mode; verified by ScrimContrastTest, which references this
+        // constant directly.
+        internal const val DIMMED_TEXT_ALPHA = 0.7f
     }
 }

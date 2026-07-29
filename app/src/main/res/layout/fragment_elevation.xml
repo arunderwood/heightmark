@@ -39,7 +39,7 @@
             android:layout_height="wrap_content"
             android:text="@string/current_elevation"
             android:textAppearance="?attr/textAppearanceLabelLargeEmphasized"
-            android:textColor="#CCFFFFFF" />
+            android:textColor="@color/hm_on_scrim_secondary" />
 
         <TextView
             android:id="@+id/elevation_text_view"
@@ -49,13 +49,15 @@
             android:maxLines="2"
             android:text="@string/loading_elevation"
             android:textAppearance="?attr/textAppearanceHeadlineSmall"
-            android:textColor="@android:color/white" />
+            android:textColor="@color/hm_on_scrim" />
 
         <com.bizzarosn.heightmark.StabilityLineView
             android:id="@+id/stability_line"
             android:layout_width="200dp"
             android:layout_height="24dp"
-            android:layout_marginTop="2dp" />
+            android:layout_marginTop="2dp"
+            android:accessibilityLiveRegion="polite"
+            android:contentDescription="@string/stability_line_a11y" />
 
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/unit_toggle_group"
@@ -71,6 +73,8 @@
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/unit_meters_a11y"
+                android:minHeight="48dp"
                 android:minWidth="96dp"
                 android:text="@string/unit_meters" />
 
@@ -79,6 +83,8 @@
                 style="?attr/materialButtonOutlinedStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:contentDescription="@string/unit_feet_a11y"
+                android:minHeight="48dp"
                 android:minWidth="96dp"
                 android:text="@string/unit_feet" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
@@ -89,9 +95,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            android:minWidth="48dp"
             android:text="@string/details_show"
-            android:textColor="#CCFFFFFF"
-            app:iconTint="#CCFFFFFF" />
+            android:textColor="@color/hm_on_scrim_secondary" />
 
         <TextView
             android:id="@+id/details_panel"
@@ -100,7 +107,7 @@
             android:layout_marginTop="4dp"
             android:fontFamily="monospace"
             android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="#CCFFFFFF"
+            android:textColor="@color/hm_on_scrim_secondary"
             android:visibility="gone"
             tools:text="Sea-level elevation: 112.4 m"
             tools:visibility="visible" />

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- "Accessibility" is a lint *category* id: every current accessibility
+         check — and any added in future AGP releases — fails the build
+         instead of warning. -->
+    <issue id="Accessibility" severity="error" />
+</lint>

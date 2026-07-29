@@ -18,11 +18,15 @@
 
     <style name="Theme.HeightMark" parent="Base.Theme.HeightMark" />
 
-    <!-- For controls sitting on top of the photo/scrim: white text and outline
-         regardless of light/dark theme, while checked containers keep theme colors. -->
+    <!-- For controls sitting on top of the photo/scrim: every color is pinned
+         (opting out of dynamic color) because the backdrop is the always-dark
+         scrim in both light and dark themes. The checked-container pair is the
+         light-scheme secondary container: ~13:1 label-on-container contrast. -->
     <style name="ThemeOverlay.HeightMark.OnImage" parent="">
-        <item name="colorOnSurface">@android:color/white</item>
-        <item name="colorOutline">#B3FFFFFF</item>
+        <item name="colorOnSurface">@color/hm_on_scrim</item>
+        <item name="colorOutline">@color/hm_on_scrim_outline</item>
+        <item name="colorSecondaryContainer">#D4E8D0</item>
+        <item name="colorOnSecondaryContainer">#0F1F10</item>
     </style>
 
     <style name="Theme.HeightMark.Splash" parent="Theme.SplashScreen">
