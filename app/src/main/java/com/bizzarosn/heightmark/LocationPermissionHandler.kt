@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -52,26 +53,14 @@ class LocationPermissionHandler(
     }
     
     fun checkPermission() {
-        when {
-            hasFinePermission() -> {
-                onPermissionStateChanged(LocationPermissionState.Granted)
-            }
-
-            hasLocationPermission() -> {
-                // Approximate-only grant: GPS (and therefore elevation) needs precise
-                onPermissionStateChanged(LocationPermissionState.CoarseOnly)
-                showPreciseUpgradeDialog()
-            }
-
-            shouldShowRationale() -> {
-                onPermissionStateChanged(LocationPermissionState.RequiresRationale)
-                showPermissionRequiredDialog()
-            }
-
-            else -> {
-                requestPermissions()
-            }
-        }
+        applyResolution(
+            LocationPermissionPolicy.resolve(
+                fineGranted = hasFinePermission(),
+                anyGranted = hasLocationPermission(),
+                shouldShowRationale = shouldShowRationale(),
+                isRequestResult = false
+            )
+        )
     }
 
     fun hasLocationPermission(): Boolean {
@@ -99,24 +88,28 @@ class LocationPermissionHandler(
     }
     
     private fun handlePermissionResult(permissions: Map<String, Boolean>) {
-        when {
-            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true -> {
-                onPermissionStateChanged(LocationPermissionState.Granted)
-            }
+        applyResolution(
+            LocationPermissionPolicy.resolve(
+                fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true,
+                anyGranted = permissions.values.any { it },
+                shouldShowRationale = shouldShowRationale(),
+                isRequestResult = true
+            )
+        )
+    }
 
-            permissions.values.any { it } -> {
-                onPermissionStateChanged(LocationPermissionState.CoarseOnly)
-                showPreciseUpgradeDialog()
-            }
-
-            shouldShowRationale() -> {
-                onPermissionStateChanged(LocationPermissionState.RequiresRationale)
-                showPermissionRequiredDialog()
-            }
-
-            else -> {
-                onPermissionStateChanged(LocationPermissionState.PermanentlyDenied)
-                showPermanentDenialDialog()
+    private fun applyResolution(resolution: LocationPermissionPolicy.Resolution) {
+        when (resolution) {
+            is LocationPermissionPolicy.Resolution.RequestPermissions -> requestPermissions()
+            is LocationPermissionPolicy.Resolution.Report -> {
+                onPermissionStateChanged(resolution.state)
+                when (resolution.dialog) {
+                    LocationPermissionPolicy.Dialog.PreciseUpgrade -> showPreciseUpgradeDialog()
+                    LocationPermissionPolicy.Dialog.PermissionRequired ->
+                        showPermissionRequiredDialog()
+                    LocationPermissionPolicy.Dialog.PermanentDenial -> showPermanentDenialDialog()
+                    null -> Unit
+                }
             }
         }
     }
@@ -128,57 +121,62 @@ class LocationPermissionHandler(
         if (currentDialog?.isShowing == true) return
         upgradeDialogShown = true
 
+        showDialog(
+            titleRes = R.string.precise_location_required,
+            messageRes = R.string.precise_location_required_message,
+            positiveRes = R.string.grant_permission,
+            onPositive = ::requestPermissions,
+            negativeRes = R.string.open_settings,
+            onNegative = ::openAppSettings
+        )
+    }
+
+    private fun showPermissionRequiredDialog() {
+        if (currentDialog?.isShowing == true) return
+
+        showDialog(
+            titleRes = R.string.location_permission_required,
+            messageRes = R.string.this_app_needs_location_permission_to_determine_your_elevation_without_this_permission_the_app_cannot_function,
+            positiveRes = R.string.grant_permission,
+            onPositive = ::requestPermissions,
+            negativeRes = R.string.exit_app,
+            onNegative = { fragment.requireActivity().finish() }
+        )
+    }
+
+    private fun showPermanentDenialDialog() {
+        if (currentDialog?.isShowing == true) return
+
+        showDialog(
+            titleRes = R.string.location_permission_required,
+            messageRes = R.string.permission_permanently_denied_message,
+            positiveRes = R.string.open_settings,
+            onPositive = ::openAppSettings,
+            negativeRes = R.string.exit_app,
+            onNegative = { fragment.requireActivity().finish() }
+        )
+    }
+
+    /** Builds and shows the single tracked dialog; callers gate on [currentDialog]. */
+    private fun showDialog(
+        @StringRes titleRes: Int,
+        @StringRes messageRes: Int,
+        @StringRes positiveRes: Int,
+        onPositive: () -> Unit,
+        @StringRes negativeRes: Int,
+        onNegative: () -> Unit
+    ) {
         currentDialog = AlertDialog.Builder(fragment.requireContext())
-            .setTitle(fragment.getString(R.string.precise_location_required))
-            .setMessage(fragment.getString(R.string.precise_location_required_message))
-            .setPositiveButton(fragment.getString(R.string.grant_permission)) { _, _ ->
-                requestPermissions()
-            }
-            .setNegativeButton(fragment.getString(R.string.open_settings)) { _, _ ->
-                openAppSettings()
-            }
+            .setTitle(fragment.getString(titleRes))
+            .setMessage(fragment.getString(messageRes))
+            .setPositiveButton(fragment.getString(positiveRes)) { _, _ -> onPositive() }
+            .setNegativeButton(fragment.getString(negativeRes)) { _, _ -> onNegative() }
             .setCancelable(false)
             .create()
 
         currentDialog?.show()
     }
-    
-    private fun showPermissionRequiredDialog() {
-        if (currentDialog?.isShowing == true) return
-        
-        currentDialog = AlertDialog.Builder(fragment.requireContext())
-            .setTitle(fragment.getString(R.string.location_permission_required))
-            .setMessage(fragment.getString(R.string.this_app_needs_location_permission_to_determine_your_elevation_without_this_permission_the_app_cannot_function))
-            .setPositiveButton(fragment.getString(R.string.grant_permission)) { _, _ ->
-                requestPermissions()
-            }
-            .setNegativeButton(fragment.getString(R.string.exit_app)) { _, _ ->
-                fragment.requireActivity().finish()
-            }
-            .setCancelable(false)
-            .create()
-        
-        currentDialog?.show()
-    }
-    
-    private fun showPermanentDenialDialog() {
-        if (currentDialog?.isShowing == true) return
-        
-        currentDialog = AlertDialog.Builder(fragment.requireContext())
-            .setTitle(fragment.getString(R.string.location_permission_required))
-            .setMessage(fragment.getString(R.string.permission_permanently_denied_message))
-            .setPositiveButton(fragment.getString(R.string.open_settings)) { _, _ ->
-                openAppSettings()
-            }
-            .setNegativeButton(fragment.getString(R.string.exit_app)) { _, _ ->
-                fragment.requireActivity().finish()
-            }
-            .setCancelable(false)
-            .create()
-        
-        currentDialog?.show()
-    }
-    
+
     private fun openAppSettings() {
         val intent = Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,

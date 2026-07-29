@@ -2,14 +2,9 @@ package com.bizzarosn.heightmark
 
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -18,21 +13,13 @@ import javax.inject.Inject
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class StartupCrashTest {
-
-    @get:Rule
-    var hiltRule = HiltAndroidRule(this)
+class StartupCrashTest : HiltUiTestBase() {
 
     @Inject
     lateinit var preferencesRepository: PreferencesRepository
 
     @Inject
     lateinit var elevationService: ElevationService
-
-    @Before
-    fun init() {
-        hiltRule.inject()
-    }
 
     @Test
     fun mainActivityStartsSuccessfully() {

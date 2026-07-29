@@ -7,6 +7,8 @@ import com.bizzarosn.heightmark.AltitudeResolver
 import com.bizzarosn.heightmark.ElevationService
 import com.bizzarosn.heightmark.IdleWakeMonitor
 import com.bizzarosn.heightmark.PreferencesRepository
+import com.bizzarosn.heightmark.PressureDeltaDetector
+import com.bizzarosn.heightmark.StillnessDetector
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,6 +20,8 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    private const val ELEVATION_WINDOW_SIZE = 10
+
     @Provides
     @Singleton
     fun providePreferencesRepository(
@@ -28,7 +32,7 @@ object AppModule {
 
     @Provides
     fun provideElevationService(): ElevationService {
-        return ElevationService(readingsCount = 10)
+        return ElevationService(readingsCount = ELEVATION_WINDOW_SIZE)
     }
 
     @Provides
@@ -56,10 +60,21 @@ object AppModule {
     }
 
     @Provides
+    fun provideStillnessDetector(): StillnessDetector {
+        return StillnessDetector()
+    }
+
+    @Provides
+    fun providePressureDeltaDetector(): PressureDeltaDetector {
+        return PressureDeltaDetector()
+    }
+
+    @Provides
     fun provideIdleWakeMonitor(
         locationManager: LocationManager,
-        sensorManager: SensorManager
+        sensorManager: SensorManager,
+        pressureDetector: PressureDeltaDetector
     ): IdleWakeMonitor {
-        return IdleWakeMonitor(locationManager, sensorManager)
+        return IdleWakeMonitor(locationManager, sensorManager, pressureDetector)
     }
 }

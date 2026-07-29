@@ -36,15 +36,8 @@ class AltitudeResolverTest {
         unmockkStatic(Log::class)
     }
 
-    private fun location(ellipsoid: Double, msl: Double? = null): Location {
-        val location = mockk<Location>()
-        every { location.altitude } returns ellipsoid
-        every { location.hasMslAltitude() } returns (msl != null)
-        if (msl != null) {
-            every { location.mslAltitudeMeters } returns msl
-        }
-        return location
-    }
+    private fun location(ellipsoid: Double, msl: Double? = null): Location =
+        TestLocations.altitudeFix(ellipsoid, msl)
 
     @Test
     fun `returns MSL altitude when conversion succeeds`() {

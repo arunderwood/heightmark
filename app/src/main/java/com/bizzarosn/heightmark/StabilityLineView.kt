@@ -9,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
 import android.view.View
+import androidx.annotation.StringRes
 import android.view.animation.AnimationUtils
 import android.view.animation.LinearInterpolator
 import kotlin.math.PI
@@ -42,35 +43,17 @@ class StabilityLineView @JvmOverloads constructor(
     private val maxAmplitude = 6f * density
     private val wavelength = 66f * density
 
-    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = this@StabilityLineView.strokeWidth
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-    }
+    private val linePaint = strokePaint(strokeWidth)
 
     // Fake glow: a wide translucent under-stroke, safe on a hardware canvas
-    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 9f * density
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-    }
+    private val glowPaint = strokePaint(9f * density)
 
-    private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = this@StabilityLineView.strokeWidth
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-    }
+    private val wavePaint = strokePaint(strokeWidth)
 
-    private val dormantPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = this@StabilityLineView.strokeWidth
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-        pathEffect = DashPathEffect(floatArrayOf(3f * density, 6f * density), 0f)
-    }
+    private val dormantPaint = strokePaint(
+        strokeWidth,
+        DashPathEffect(floatArrayOf(3f * density, 6f * density), 0f)
+    )
 
     private val wavePath = Path()
 
@@ -88,27 +71,22 @@ class StabilityLineView @JvmOverloads constructor(
 
     init {
         // The initial state never passes through setState's change guard
-        stateDescription = context.getString(spokenStateRes(state))
+        stateDescription = context.getString(presentationFor(state).spokenRes)
     }
 
     fun setState(newState: ReadingState) {
         if (newState == state) return
         state = newState
-        when (newState) {
-            ReadingState.Acquiring -> setTargets(amplitude = 1f, core = 0f, dormantMix = 0f)
-            is ReadingState.Converging -> {
-                val p = newState.progress.coerceIn(0f, 1f)
-                setTargets(amplitude = 1f - p, core = p, dormantMix = 0f)
-            }
-            ReadingState.Stable -> setTargets(amplitude = 0f, core = 1f, dormantMix = 0f)
-            ReadingState.Dormant -> setTargets(amplitude = 0f, core = 0f, dormantMix = 1f)
-        }
+        val presentation = presentationFor(newState)
+        targetAmplitude = presentation.amplitude
+        targetCore = presentation.core
+        targetDormantMix = presentation.dormantMix
         // The static contentDescription comes from the layout; the state
         // rides in stateDescription, whose change event the polite live
         // region turns into an automatic TalkBack announcement. Converging
         // arrives once per progress step, so guard against re-announcing
         // the same phrase.
-        val spokenState = context.getString(spokenStateRes(newState))
+        val spokenState = context.getString(presentation.spokenRes)
         if (stateDescription != spokenState) {
             stateDescription = spokenState
         }
@@ -120,17 +98,34 @@ class StabilityLineView @JvmOverloads constructor(
         invalidate()
     }
 
-    private fun spokenStateRes(state: ReadingState) = when (state) {
-        ReadingState.Acquiring -> R.string.stability_acquiring
-        is ReadingState.Converging -> R.string.stability_converging
-        ReadingState.Stable -> R.string.stability_stable
-        ReadingState.Dormant -> R.string.stability_dormant
-    }
+    /** Everything the view derives from a [ReadingState], in one place. */
+    private data class StatePresentation(
+        val amplitude: Float,
+        val core: Float,
+        val dormantMix: Float,
+        @StringRes val spokenRes: Int
+    )
 
-    private fun setTargets(amplitude: Float, core: Float, dormantMix: Float) {
-        targetAmplitude = amplitude
-        targetCore = core
-        targetDormantMix = dormantMix
+    private fun presentationFor(state: ReadingState): StatePresentation = when (state) {
+        ReadingState.Acquiring -> StatePresentation(
+            amplitude = 1f, core = 0f, dormantMix = 0f,
+            spokenRes = R.string.stability_acquiring
+        )
+        is ReadingState.Converging -> {
+            val p = state.progress.coerceIn(0f, 1f)
+            StatePresentation(
+                amplitude = 1f - p, core = p, dormantMix = 0f,
+                spokenRes = R.string.stability_converging
+            )
+        }
+        ReadingState.Stable -> StatePresentation(
+            amplitude = 0f, core = 1f, dormantMix = 0f,
+            spokenRes = R.string.stability_stable
+        )
+        ReadingState.Dormant -> StatePresentation(
+            amplitude = 0f, core = 0f, dormantMix = 1f,
+            spokenRes = R.string.stability_dormant
+        )
     }
 
     private fun snapToTargets() {
@@ -191,7 +186,7 @@ class StabilityLineView @JvmOverloads constructor(
         val active = 1f - dormantMix
 
         if (dormantMix > EPSILON) {
-            dormantPaint.alpha = (255 * DORMANT_ALPHA * dormantMix).toInt()
+            dormantPaint.setAlphaFraction(DORMANT_ALPHA * dormantMix)
             canvas.drawLine(inset, centerY, width - inset, centerY, dormantPaint)
         }
 
@@ -201,7 +196,7 @@ class StabilityLineView @JvmOverloads constructor(
 
             if (amplitude > EPSILON && core < 1f - EPSILON) {
                 buildWavePath(inset, width - inset, centerY)
-                wavePaint.alpha = (255 * WAVE_ALPHA * active).toInt()
+                wavePaint.setAlphaFraction(WAVE_ALPHA * active)
                 if (coreHalf > 0f) {
                     canvas.save()
                     canvas.clipOutRect(
@@ -215,12 +210,15 @@ class StabilityLineView @JvmOverloads constructor(
             }
 
             if (coreHalf > strokeWidth / 2f) {
+                fun drawCore(paint: Paint) =
+                    canvas.drawLine(centerX - coreHalf, centerY, centerX + coreHalf, centerY, paint)
+
                 val breath = 0.875f + 0.125f *
                     sin(2f * PI.toFloat() * (AnimationUtils.currentAnimationTimeMillis() % BREATH_PERIOD_MS) / BREATH_PERIOD_MS)
-                glowPaint.alpha = (255 * GLOW_ALPHA * breath * active).toInt()
-                canvas.drawLine(centerX - coreHalf, centerY, centerX + coreHalf, centerY, glowPaint)
-                linePaint.alpha = (255 * CORE_ALPHA * active).toInt()
-                canvas.drawLine(centerX - coreHalf, centerY, centerX + coreHalf, centerY, linePaint)
+                glowPaint.setAlphaFraction(GLOW_ALPHA * breath * active)
+                drawCore(glowPaint)
+                linePaint.setAlphaFraction(CORE_ALPHA * active)
+                drawCore(linePaint)
             }
         }
 
@@ -228,6 +226,19 @@ class StabilityLineView @JvmOverloads constructor(
             snapToTargets()
             stopAnimator()
         }
+    }
+
+    private fun strokePaint(widthPx: Float, dash: DashPathEffect? = null) =
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = widthPx
+            strokeCap = Paint.Cap.ROUND
+            color = Color.WHITE
+            pathEffect = dash
+        }
+
+    private fun Paint.setAlphaFraction(fraction: Float) {
+        alpha = (255 * fraction).toInt()
     }
 
     private fun buildWavePath(startX: Float, endX: Float, centerY: Float) {

@@ -1,26 +1,20 @@
 package com.bizzarosn.heightmark
 
 import android.Manifest
-import androidx.test.core.app.ActivityScenario
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
-import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class ElevationFragmentTest {
-
-    @get:Rule(order = 0)
-    var hiltRule = HiltAndroidRule(this)
+class ElevationFragmentTest : HiltUiTestBase() {
 
     @get:Rule(order = 1)
     val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(
@@ -28,38 +22,22 @@ class ElevationFragmentTest {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
 
-    @Before
-    fun init() {
-        hiltRule.inject()
-    }
-
     @Test
     fun appStartsWithoutCrashing() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // Verify main activity starts without crashing
-            onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-        }
-    }
-
-    @Test
-    fun elevationTextViewIsDisplayed() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // Verify elevation text view is present
-            onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-        }
+        // launchHome verifies the main activity starts and shows the hero view
+        launchHome()
     }
 
     @Test
     fun unitToggleIsDisplayed() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // Verify unit toggle group is present
+        launchHome {
             onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
         }
     }
 
     @Test
     fun stabilityLineIsDisplayed() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchHome {
             // The settling line is visible whenever GPS is usable
             onView(withId(R.id.stability_line)).check(matches(isDisplayed()))
         }
@@ -67,7 +45,7 @@ class ElevationFragmentTest {
 
     @Test
     fun unitToggleChangesUnits() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchHome {
             // Wait for initial state
             Thread.sleep(1000)
 

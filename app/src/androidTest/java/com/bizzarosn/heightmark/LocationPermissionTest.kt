@@ -11,37 +11,15 @@ import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
-import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.junit.Assume.assumeFalse
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class LocationPermissionTest {
-
-    @get:Rule(order = 0)
-    var hiltRule = HiltAndroidRule(this)
-
-    @Before
-    fun init() {
-        hiltRule.inject()
-    }
-
-    @Test
-    fun appStartsWithoutPermissions() {
-        // Test app behavior when no location permissions are granted
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // App should still start without crashing
-            onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
-            
-            // Should show permission required message or loading state
-            // This test verifies the app doesn't crash on startup without permissions
-        }
-    }
+class LocationPermissionTest : HiltUiTestBase() {
 
     @get:Rule(order = 1)
     val fineLocationPermissionRule: GrantPermissionRule = GrantPermissionRule.grant(
@@ -49,10 +27,15 @@ class LocationPermissionTest {
     )
 
     @Test
+    fun appStartsWithoutPermissions() {
+        // The app should start without crashing regardless of the granted set;
+        // launchHome verifies the hero view renders (permission message or value)
+        launchHome()
+    }
+
+    @Test
     fun appWorksWithFineLocationOnly() {
-        // Test app behavior with only fine location permission
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
+        launchHome {
             onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
         }
     }
@@ -60,20 +43,12 @@ class LocationPermissionTest {
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class CoarseLocationPermissionTest {
-
-    @get:Rule(order = 0)
-    var hiltRule = HiltAndroidRule(this)
+class CoarseLocationPermissionTest : HiltUiTestBase() {
 
     @get:Rule(order = 1)
     val coarseLocationPermissionRule: GrantPermissionRule = GrantPermissionRule.grant(
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
-
-    @Before
-    fun init() {
-        hiltRule.inject()
-    }
 
     @Test
     fun appPromptsForPreciseLocationWithCoarseOnly() {
@@ -102,10 +77,7 @@ class CoarseLocationPermissionTest {
 
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
-class BothLocationPermissionsTest {
-
-    @get:Rule(order = 0)
-    var hiltRule = HiltAndroidRule(this)
+class BothLocationPermissionsTest : HiltUiTestBase() {
 
     @get:Rule(order = 1)
     val permissionRule: GrantPermissionRule = GrantPermissionRule.grant(
@@ -113,16 +85,9 @@ class BothLocationPermissionsTest {
         Manifest.permission.ACCESS_COARSE_LOCATION
     )
 
-    @Before
-    fun init() {
-        hiltRule.inject()
-    }
-
     @Test
     fun appWorksWithBothPermissions() {
-        // Test app behavior with both location permissions
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            onView(withId(R.id.elevation_text_view)).check(matches(isDisplayed()))
+        launchHome {
             onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
 
             // With permissions, the app should start location updates

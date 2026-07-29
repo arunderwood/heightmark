@@ -2,7 +2,6 @@ package com.bizzarosn.heightmark
 
 import android.location.Location
 import io.mockk.every
-import io.mockk.mockk
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,16 +14,8 @@ class StillnessDetectorTest {
         maxDriftMeters = 15f
     )
 
-    private fun fix(atMs: Long, speed: Float = 0f, driftMeters: Float = 0f): Location {
-        val location = mockk<Location>()
-        every { location.elapsedRealtimeNanos } returns atMs * 1_000_000
-        every { location.hasSpeed() } returns true
-        every { location.speed } returns speed
-        // distanceTo is only ever called with the window anchor as receiver;
-        // model the anchor's drift parameter as its distance to everything
-        every { location.distanceTo(any()) } returns driftMeters
-        return location
-    }
+    private fun fix(atMs: Long, speed: Float = 0f, driftMeters: Float = 0f): Location =
+        TestLocations.movingFix(atMs, speed, driftMeters)
 
     @Test
     fun `not stationary until the full window is covered`() {

@@ -52,12 +52,12 @@ class ElevationServiceTest {
 
     @Test
     fun `readingCount tracks the rolling window size`() {
-        assertEquals(0, elevationService.readingCount())
+        assertEquals(0, elevationService.snapshot().readingCount)
         elevationService.addElevationReading(100.0)
-        assertEquals(1, elevationService.readingCount())
+        assertEquals(1, elevationService.snapshot().readingCount)
         repeat(5) { elevationService.addElevationReading(100.0) }
         // Capped at the window size (3)
-        assertEquals(3, elevationService.readingCount())
+        assertEquals(3, elevationService.snapshot().readingCount)
     }
 
     @Test

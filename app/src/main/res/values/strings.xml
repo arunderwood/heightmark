@@ -12,6 +12,8 @@
     <string name="unit_feet_a11y">Feet</string>
     <string name="unit_meters_spoken">meters</string>
     <string name="unit_feet_spoken">feet</string>
+    <!-- Same format as elevation_text today, but kept separate so spoken
+         output can diverge from visual output in translations. -->
     <string name="elevation_a11y">%1$d %2$s</string>
     <string name="stability_line_a11y">Reading stability</string>
     <string name="details_state_expanded">Expanded</string>

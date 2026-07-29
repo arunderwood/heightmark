@@ -25,8 +25,8 @@
     <style name="ThemeOverlay.HeightMark.OnImage" parent="">
         <item name="colorOnSurface">@color/hm_on_scrim</item>
         <item name="colorOutline">@color/hm_on_scrim_outline</item>
-        <item name="colorSecondaryContainer">#D4E8D0</item>
-        <item name="colorOnSecondaryContainer">#0F1F10</item>
+        <item name="colorSecondaryContainer">@color/hm_on_image_checked_container</item>
+        <item name="colorOnSecondaryContainer">@color/hm_on_image_on_checked_container</item>
     </style>
 
     <style name="Theme.HeightMark.Splash" parent="Theme.SplashScreen">
