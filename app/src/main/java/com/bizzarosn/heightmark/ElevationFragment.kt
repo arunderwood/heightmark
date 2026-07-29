@@ -1,11 +1,9 @@
 package com.bizzarosn.heightmark
 
-import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -24,6 +22,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.TextViewCompat
@@ -175,7 +174,7 @@ class ElevationFragment : Fragment() {
 
     /** Extra data feeds (satellites, pressure, fix-age ticker) used only by the panel. */
     private fun startDetailsSources() {
-        if (gnssStatusCallback == null && hasLocationPermission()) {
+        if (gnssStatusCallback == null && permissionHandler.hasFinePermission()) {
             val callback = object : GnssStatus.Callback() {
                 override fun onSatelliteStatusChanged(status: GnssStatus) {
                     satellitesVisible = status.satelliteCount
@@ -230,33 +229,19 @@ class ElevationFragment : Fragment() {
     private fun handlePermissionStateChange(state: LocationPermissionState) {
         when (state) {
             is LocationPermissionState.Granted -> {
-                if (hasLocationPermission()) {
-                    startLocationUpdates()
-                } else {
-                    // This shouldn't happen, but handle gracefully
-                    showPermissionRequired()
-                }
+                // startLocationUpdates re-verifies the permission itself
+                startLocationUpdates()
             }
             is LocationPermissionState.CoarseOnly -> {
                 stopLocationUpdates()
-                showPreciseLocationRequired()
+                showBlockedStatus(R.string.precise_location_required)
             }
-            is LocationPermissionState.PermanentlyDenied -> {
-                stopLocationUpdates()
-                showPermissionRequired()
-            }
+            is LocationPermissionState.PermanentlyDenied,
             is LocationPermissionState.RequiresRationale -> {
                 stopLocationUpdates()
-                showPermissionRequired()
+                showBlockedStatus(R.string.location_permission_required)
             }
         }
-    }
-
-    private fun hasLocationPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun isGpsAvailable(): Boolean {
@@ -266,8 +251,8 @@ class ElevationFragment : Fragment() {
 
     private fun startLocationUpdates() {
         // Double-check permissions before starting location updates
-        if (!hasLocationPermission()) {
-            showPermissionRequired()
+        if (!permissionHandler.hasFinePermission()) {
+            showBlockedStatus(R.string.location_permission_required)
             return
         }
 
@@ -302,7 +287,7 @@ class ElevationFragment : Fragment() {
             } catch (e: SecurityException) {
                 // Log the unexpected security exception for debugging
                 Log.e(TAG, "Unexpected SecurityException despite permission check", e)
-                showPermissionRequired()
+                showBlockedStatus(R.string.location_permission_required)
             }
         }
     }
@@ -375,7 +360,7 @@ class ElevationFragment : Fragment() {
             refreshDetails()
         } catch (e: SecurityException) {
             Log.e(TAG, "Lost permission while going idle", e)
-            showPermissionRequired()
+            showBlockedStatus(R.string.location_permission_required)
         }
     }
 
@@ -484,7 +469,7 @@ class ElevationFragment : Fragment() {
             IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
-        if (hasLocationPermission()) {
+        if (permissionHandler.hasFinePermission()) {
             // A long gap away from the app can mean a new elevation: start
             // the average over rather than walking the stale window there
             if (pausedAtElapsedMs != 0L &&
@@ -532,19 +517,14 @@ class ElevationFragment : Fragment() {
         elevationTextView.alpha = 1f
     }
 
-    private fun showPermissionRequired() {
+    /** Blocked states (missing permission, GPS off) share this presentation. */
+    private fun showBlockedStatus(@StringRes messageRes: Int) {
         hideStabilityLine()
-        showStatusText(getString(R.string.location_permission_required))
-    }
-
-    private fun showPreciseLocationRequired() {
-        hideStabilityLine()
-        showStatusText(getString(R.string.precise_location_required))
+        showStatusText(getString(messageRes))
     }
 
     private fun showLocationOff() {
-        hideStabilityLine()
-        showStatusText(getString(R.string.location_services_off))
+        showBlockedStatus(R.string.location_services_off)
 
         if (locationOffDialog?.isShowing == true) return
         locationOffDialog = AlertDialog.Builder(requireContext())
