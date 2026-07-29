@@ -26,7 +26,6 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
-import androidx.core.widget.TextViewCompat
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -580,7 +579,7 @@ class ElevationFragment : Fragment() {
     private fun applyTextAppearance(textAppearanceAttr: Int) {
         val resolved = TypedValue()
         requireContext().theme.resolveAttribute(textAppearanceAttr, resolved, true)
-        TextViewCompat.setTextAppearance(elevationTextView, resolved.resourceId)
+        elevationTextView.setTextAppearance(resolved.resourceId)
         elevationTextView.setTextColor(requireContext().getColor(R.color.hm_on_scrim))
     }
 
