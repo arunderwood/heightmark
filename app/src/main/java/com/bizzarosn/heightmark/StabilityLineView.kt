@@ -86,8 +86,13 @@ class StabilityLineView @JvmOverloads constructor(
     private var state: ReadingState = ReadingState.Acquiring
     private var animator: ValueAnimator? = null
 
+    init {
+        // The initial state never passes through setState's change guard
+        stateDescription = context.getString(spokenStateRes(state))
+    }
+
     fun setState(newState: ReadingState) {
-        if (newState == state && contentDescription != null) return
+        if (newState == state) return
         state = newState
         when (newState) {
             ReadingState.Acquiring -> setTargets(amplitude = 1f, core = 0f, dormantMix = 0f)
@@ -98,20 +103,28 @@ class StabilityLineView @JvmOverloads constructor(
             ReadingState.Stable -> setTargets(amplitude = 0f, core = 1f, dormantMix = 0f)
             ReadingState.Dormant -> setTargets(amplitude = 0f, core = 0f, dormantMix = 1f)
         }
-        contentDescription = context.getString(
-            when (newState) {
-                ReadingState.Acquiring -> R.string.stability_acquiring
-                is ReadingState.Converging -> R.string.stability_converging
-                ReadingState.Stable -> R.string.stability_stable
-                ReadingState.Dormant -> R.string.stability_dormant
-            }
-        )
+        // The static contentDescription comes from the layout; the state
+        // rides in stateDescription, whose change event the polite live
+        // region turns into an automatic TalkBack announcement. Converging
+        // arrives once per progress step, so guard against re-announcing
+        // the same phrase.
+        val spokenState = context.getString(spokenStateRes(newState))
+        if (stateDescription != spokenState) {
+            stateDescription = spokenState
+        }
         if (!ValueAnimator.areAnimatorsEnabled()) {
             snapToTargets()
         } else if (isAttachedToWindow) {
             startAnimator()
         }
         invalidate()
+    }
+
+    private fun spokenStateRes(state: ReadingState) = when (state) {
+        ReadingState.Acquiring -> R.string.stability_acquiring
+        is ReadingState.Converging -> R.string.stability_converging
+        ReadingState.Stable -> R.string.stability_stable
+        ReadingState.Dormant -> R.string.stability_dormant
     }
 
     private fun setTargets(amplitude: Float, core: Float, dormantMix: Float) {
@@ -242,9 +255,14 @@ class StabilityLineView @JvmOverloads constructor(
         private const val EPSILON = 0.005f
         private const val WAVE_PERIOD_MS = 1_400L
         private const val BREATH_PERIOD_MS = 4_000L
-        private const val WAVE_ALPHA = 0.55f
-        private const val CORE_ALPHA = 0.95f
+        // The wave and dormant strokes carry meaning, so they must clear the
+        // 3:1 non-text contrast minimum over the day-mode scrim floor;
+        // ScrimContrastTest references these constants directly. The glow is
+        // a decorative under-stroke beneath the near-opaque core line and is
+        // exempt.
+        internal const val WAVE_ALPHA = 0.65f
+        internal const val CORE_ALPHA = 0.95f
         private const val GLOW_ALPHA = 0.22f
-        private const val DORMANT_ALPHA = 0.35f
+        internal const val DORMANT_ALPHA = 0.6f
     }
 }

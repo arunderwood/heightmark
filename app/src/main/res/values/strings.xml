@@ -6,6 +6,16 @@
     <string name="current_elevation">Current elevation</string>
     <string name="unit_meters">m</string>
     <string name="unit_feet">ft</string>
+    <!-- Screen-reader labels: the visual chips show bare "m"/"ft", which
+         TalkBack would read letter-by-letter -->
+    <string name="unit_meters_a11y">Meters</string>
+    <string name="unit_feet_a11y">Feet</string>
+    <string name="unit_meters_spoken">meters</string>
+    <string name="unit_feet_spoken">feet</string>
+    <string name="elevation_a11y">%1$d %2$s</string>
+    <string name="stability_line_a11y">Reading stability</string>
+    <string name="details_state_expanded">Expanded</string>
+    <string name="details_state_collapsed">Collapsed</string>
     <string name="location_permission_required">Location Permission Required</string>
     <string name="this_app_needs_location_permission_to_determine_your_elevation_without_this_permission_the_app_cannot_function">This app needs location permission to determine your elevation. Without this permission, the app cannot function.</string>
     <string name="grant_permission">Grant Permission</string>
