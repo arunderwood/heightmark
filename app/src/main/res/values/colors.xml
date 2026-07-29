@@ -23,6 +23,14 @@
          ScrimContrastTest verifies this relationship. -->
     <color name="hm_scrim_floor">#99000000</color>
 
+    <!-- Checked-chip pair for controls on the scrimmed image
+         (ThemeOverlay.HeightMark.OnImage). Same values as the light-scheme
+         hm_secondary_container pair, but deliberately separate resources with
+         NO values-night override: the backdrop is the always-dark scrim in
+         both themes, so these must never follow a night palette. -->
+    <color name="hm_on_image_checked_container">#D4E8D0</color>
+    <color name="hm_on_image_on_checked_container">#0F1F10</color>
+
     <!-- Text/stroke colors used on top of the scrimmed background image.
          Referenced by both the layout and ScrimContrastTest. -->
     <color name="hm_on_scrim">#FFFFFFFF</color>

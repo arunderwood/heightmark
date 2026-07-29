@@ -27,7 +27,7 @@
         android:gravity="center_horizontal"
         android:orientation="vertical"
         android:paddingHorizontal="24dp"
-        android:paddingTop="48dp"
+        android:paddingTop="@dimen/scrim_fade_height"
         android:paddingBottom="32dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -74,8 +74,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:contentDescription="@string/unit_meters_a11y"
-                android:minHeight="48dp"
-                android:minWidth="96dp"
+                android:minHeight="@dimen/min_touch_target"
+                android:minWidth="@dimen/unit_chip_min_width"
                 android:text="@string/unit_meters" />
 
             <com.google.android.material.button.MaterialButton
@@ -84,8 +84,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:contentDescription="@string/unit_feet_a11y"
-                android:minHeight="48dp"
-                android:minWidth="96dp"
+                android:minHeight="@dimen/min_touch_target"
+                android:minWidth="@dimen/unit_chip_min_width"
                 android:text="@string/unit_feet" />
         </com.google.android.material.button.MaterialButtonToggleGroup>
 
@@ -95,8 +95,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            android:minWidth="48dp"
+            android:minHeight="@dimen/min_touch_target"
+            android:minWidth="@dimen/min_touch_target"
             android:text="@string/details_show"
             android:textColor="@color/hm_on_scrim_secondary" />
 

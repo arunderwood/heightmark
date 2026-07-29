@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Text-protection scrim. The fade to transparent lives entirely inside
-     content_container's 48dp top padding band, so every text element sits on
-     at least hm_scrim_floor (60% black) — white text stays >= 4.5:1 even over
-     the palest part of the day illustration. -->
+     content_container's top padding band (@dimen/scrim_fade_height), so every
+     text element sits on at least hm_scrim_floor (60% black) — white text
+     stays >= 4.5:1 even over the palest part of the day illustration. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:gravity="top" android:height="48dp">
+    <item android:gravity="top" android:height="@dimen/scrim_fade_height">
         <shape>
             <gradient
                 android:angle="90"
@@ -12,7 +12,7 @@
                 android:endColor="@android:color/transparent" />
         </shape>
     </item>
-    <item android:top="48dp">
+    <item android:top="@dimen/scrim_fade_height">
         <shape>
             <gradient
                 android:angle="90"
