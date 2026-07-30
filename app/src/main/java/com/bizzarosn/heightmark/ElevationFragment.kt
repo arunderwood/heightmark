@@ -42,7 +42,7 @@ class ElevationFragment : Fragment() {
     lateinit var preferencesRepository: PreferencesRepository
 
     @Inject
-    lateinit var elevationService: ElevationService
+    lateinit var session: ElevationSession
 
     @Inject
     lateinit var locationManager: LocationManager
@@ -64,23 +64,12 @@ class ElevationFragment : Fragment() {
     private lateinit var detailsToggle: TextView
     private lateinit var detailsPanel: TextView
     private var useMetricUnit = true
-    private var hasFix = false
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
     private var locationOffDialog: AlertDialog? = null
 
-    // The averaging window is flushed after gaps (background return, idle
-    // wake); the epoch drops geoid-conversion coroutines launched before a
-    // flush, and awaitingFreshFix keeps the cached number dimmed until the
-    // first post-flush reading lands.
-    private var readingEpoch = 0
-    private var awaitingFreshFix = false
-    private var pausedAtElapsedMs = 0L
-    private var lastDisplayedElevationMeters: Double? = null
-
     // Details panel state
     private var showDetails = false
-    private var isIdle = false
     private var lastLocation: Location? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
@@ -215,7 +204,7 @@ class ElevationFragment : Fragment() {
             locationListener = LocationListener { location -> onGnssFix(location) }
         }
 
-        if (!hasFix) {
+        if (!session.hasFix) {
             showStatusText(getString(R.string.loading_elevation))
         }
         applyReadingState()
@@ -243,11 +232,11 @@ class ElevationFragment : Fragment() {
     }
 
     private fun startSearchTimeout() {
-        if (hasFix) return
+        if (session.hasFix) return
         searchTimeoutJob?.cancel()
         searchTimeoutJob = viewLifecycleOwner.lifecycleScope.launch {
             delay(SEARCH_TIMEOUT_MS)
-            if (!hasFix) {
+            if (!session.hasFix) {
                 showStatusText(getString(R.string.still_searching))
             }
         }
@@ -258,26 +247,14 @@ class ElevationFragment : Fragment() {
             goIdle(location)
         }
 
-        // A fix without altitude would read as 0.0 and poison the average
-        if (!location.hasAltitude()) return
-        // Skip fixes whose vertical error would drag the average around. A fix
-        // that reports no vertical accuracy is kept: unknown is not the same as bad.
-        val reportedAccuracy = location.verticalAccuracyOrNull()
-        if (reportedAccuracy != null && reportedAccuracy > MAX_VERTICAL_ACCURACY_M) return
-
-        val epoch = readingEpoch
+        val pending = session.offer(location) ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             // Geoid data loads from disk on first use in a region
             val elevation = withContext(Dispatchers.IO) {
                 altitudeResolver.mslAltitudeMeters(location)
             }
             // The window was flushed while this fix was converting: drop it
-            if (epoch != readingEpoch) return@launch
-            val verticalAccuracy =
-                reportedAccuracy ?: ElevationService.DEFAULT_VERTICAL_ACCURACY_M
-            elevationService.addElevationReading(elevation, verticalAccuracy)
-            hasFix = true
-            awaitingFreshFix = false
+            if (!session.commit(pending, elevation)) return@launch
             lastLocation = location
             updateUIWithElevation()
             applyReadingState()
@@ -301,7 +278,7 @@ class ElevationFragment : Fragment() {
             ) {
                 goActive()
             }
-            isIdle = true
+            session.enterIdle()
             applyReadingState()
             refreshDetails()
         } catch (e: SecurityException) {
@@ -311,21 +288,11 @@ class ElevationFragment : Fragment() {
     }
 
     private fun goActive() {
-        isIdle = false
-        stillnessDetector.reset()
         // The wake fired because the device moved, so the window is stale
-        flushReadings()
+        session.wake()
+        stillnessDetector.reset()
         startLocationUpdates()
         refreshDetails()
-    }
-
-    /** Discard the averaging window; the cached number stays on screen, dimmed. */
-    private fun flushReadings() {
-        elevationService.reset()
-        readingEpoch++
-        if (hasFix) {
-            awaitingFreshFix = true
-        }
     }
 
     private fun refreshDetails() {
@@ -333,13 +300,13 @@ class ElevationFragment : Fragment() {
 
         val rows = DetailsPanelPresenter.rows(
             DetailsPanelPresenter.Input(
-                isIdle = isIdle,
+                isIdle = session.isIdle,
                 location = lastLocation,
                 nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
                 satellitesUsed = detailsSources.satellitesUsed,
                 satellitesVisible = detailsSources.satellitesVisible,
                 pressureHpa = detailsSources.pressureHpa,
-                readingCount = elevationService.snapshot().readingCount,
+                readingCount = session.readingCount,
                 useMetric = useMetricUnit,
                 locale = Locale.getDefault()
             )
@@ -369,13 +336,12 @@ class ElevationFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        pausedAtElapsedMs = SystemClock.elapsedRealtime()
+        session.onPaused(SystemClock.elapsedRealtime())
         requireContext().unregisterReceiver(providersChangedReceiver)
         locationOffDialog?.dismiss()
         locationOffDialog = null
         detailsSources.stop()
         stopLocationUpdates()
-        isIdle = false
     }
 
     override fun onResume() {
@@ -388,13 +354,7 @@ class ElevationFragment : Fragment() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         if (permissionHandler.hasFinePermission()) {
-            // A long gap away from the app can mean a new elevation: start
-            // the average over rather than walking the stale window there
-            if (pausedAtElapsedMs != 0L &&
-                SystemClock.elapsedRealtime() - pausedAtElapsedMs > RESET_AFTER_GAP_MS
-            ) {
-                flushReadings()
-            }
+            session.onResumed(SystemClock.elapsedRealtime())
             stillnessDetector.reset()
             startLocationUpdates()
         }
@@ -409,12 +369,7 @@ class ElevationFragment : Fragment() {
      */
     private fun applyReadingState() {
         if (!::stabilityLine.isInitialized) return
-        val state = ReadingState.derive(
-            hasFixEver = hasFix,
-            isIdle = isIdle,
-            awaitingFreshFix = awaitingFreshFix,
-            snapshot = elevationService.snapshot()
-        )
+        val state = session.readingState()
         stabilityLine.isVisible = true
         stabilityLine.setState(state)
         elevationTextView.animate()
@@ -509,17 +464,10 @@ class ElevationFragment : Fragment() {
     }
 
     private fun updateUIWithElevation() {
-        // No reading yet (e.g. units toggled before the first GPS fix) — keep the loading state
-        if (!hasFix) return
-
-        val averageMeters = elevationService.snapshot().averageMeters
-        if (!averageMeters.isNaN()) {
-            lastDisplayedElevationMeters = averageMeters
-        }
-        // The window can be empty right after a flush; keep showing the
-        // cached value (dimmed via the Dormant state) until fresh fixes land
-        val meters = lastDisplayedElevationMeters ?: return
-
+        // Null before the first fix (e.g. units toggled while still searching),
+        // and held across a flush so the cached value stays on screen — dimmed
+        // via the Dormant state — until fresh fixes land
+        val meters = session.displayedElevationMeters ?: return
         renderHero(HeroMode.Value(meters))
     }
 
@@ -533,8 +481,6 @@ class ElevationFragment : Fragment() {
         private const val TAG = "ElevationFragment"
         private const val SEARCH_TIMEOUT_MS = 30_000L
         private const val UPDATE_INTERVAL_MS = 1_000L
-        private const val MAX_VERTICAL_ACCURACY_M = 50f
-        private const val RESET_AFTER_GAP_MS = 30_000L
         private const val HERO_FADE_MS = 250L
     }
 }
