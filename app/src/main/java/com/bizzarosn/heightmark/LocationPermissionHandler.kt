@@ -1,6 +1,7 @@
 package com.bizzarosn.heightmark
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,6 +14,17 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+
+/**
+ * True when ACCESS_FINE_LOCATION is granted. GPS needs precise location, so
+ * this is the gate every location caller checks; [LocationPermissionHandler]
+ * and [ElevationTracker] share it rather than each rolling their own.
+ */
+fun Context.hasFineLocationPermission(): Boolean {
+    return ContextCompat.checkSelfPermission(
+        this, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+}
 
 sealed class LocationPermissionState {
     object Granted : LocationPermissionState()
@@ -72,9 +84,7 @@ class LocationPermissionHandler(
     }
 
     fun hasFinePermission(): Boolean {
-        return ContextCompat.checkSelfPermission(
-            fragment.requireContext(), Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        return fragment.requireContext().hasFineLocationPermission()
     }
     
     private fun shouldShowRationale(): Boolean {

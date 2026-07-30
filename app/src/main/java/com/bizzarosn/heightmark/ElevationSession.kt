@@ -14,8 +14,9 @@ import javax.inject.Inject
  *
  * Following [DetailsPanelPresenter], the clock is an input rather than a
  * [android.os.SystemClock] call, so the whole policy stays assertable in a JVM
- * test. Nothing here touches a Context or a view: [ElevationFragment] keeps
- * the listener registration, the coroutines, and the rendering.
+ * test. Nothing here touches a Context or a view: [ElevationTracker] keeps the
+ * listener registration and the coroutines, and [ElevationFragment] the
+ * rendering.
  *
  * Confined to the main thread — GNSS callbacks and the geoid-conversion
  * coroutine both land there — so none of the state is synchronized.

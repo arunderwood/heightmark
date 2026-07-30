@@ -1,9 +1,9 @@
 package com.bizzarosn.heightmark
 
 /**
- * What the current elevation reading is worth, derived from the fragment's
- * tracking flags and the averaging window. Drives [StabilityLineView] and the
- * hero number's opacity.
+ * What the current elevation reading is worth, derived from [ElevationSession]'s
+ * tracking flags and the averaging window. Reaches the screen through
+ * [ElevationUiState], driving [StabilityLineView] and the hero number's opacity.
  */
 sealed interface ReadingState {
     /** No fix yet this session: still searching for a GPS signal. */
