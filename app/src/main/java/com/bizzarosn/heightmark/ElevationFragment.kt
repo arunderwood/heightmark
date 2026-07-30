@@ -4,10 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.Sensor
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.location.GnssStatus
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -85,14 +82,9 @@ class ElevationFragment : Fragment() {
     private var showDetails = false
     private var isIdle = false
     private var lastLocation: Location? = null
-    private var satellitesUsed = 0
-    private var satellitesVisible = 0
-    private var lastPressureHpa: Float? = null
-    private var gnssStatusCallback: GnssStatus.Callback? = null
-    private var pressurePanelListener: SensorEventListener? = null
-    private var detailsTickerJob: Job? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
+    private lateinit var detailsSources: DetailsSourcesController
 
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -116,6 +108,10 @@ class ElevationFragment : Fragment() {
             handlePermissionStateChange(state)
         }
         permissionHandler.initialize()
+
+        detailsSources = DetailsSourcesController(locationManager, sensorManager) {
+            refreshDetails()
+        }
     }
 
 
@@ -168,56 +164,16 @@ class ElevationFragment : Fragment() {
             startDetailsSources()
             refreshDetails()
         } else {
-            stopDetailsSources()
+            detailsSources.stop()
         }
     }
 
-    /** Extra data feeds (satellites, pressure, fix-age ticker) used only by the panel. */
     private fun startDetailsSources() {
-        if (gnssStatusCallback == null && permissionHandler.hasFinePermission()) {
-            val callback = object : GnssStatus.Callback() {
-                override fun onSatelliteStatusChanged(status: GnssStatus) {
-                    satellitesVisible = status.satelliteCount
-                    satellitesUsed = (0 until status.satelliteCount).count { status.usedInFix(it) }
-                    refreshDetails()
-                }
-            }
-            try {
-                locationManager.registerGnssStatusCallback(
-                    ContextCompat.getMainExecutor(requireContext()), callback
-                )
-                gnssStatusCallback = callback
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Cannot register GnssStatus callback", e)
-            }
-        }
-
-        if (pressurePanelListener == null) {
-            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sensor ->
-                val listener = sensorListener { event -> lastPressureHpa = event.values[0] }
-                if (sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)) {
-                    pressurePanelListener = listener
-                }
-            }
-        }
-
-        if (detailsTickerJob == null) {
-            detailsTickerJob = viewLifecycleOwner.lifecycleScope.launch {
-                while (true) {
-                    delay(1_000)
-                    refreshDetails()
-                }
-            }
-        }
-    }
-
-    private fun stopDetailsSources() {
-        gnssStatusCallback?.let { locationManager.unregisterGnssStatusCallback(it) }
-        gnssStatusCallback = null
-        pressurePanelListener?.let { sensorManager.unregisterListener(it) }
-        pressurePanelListener = null
-        detailsTickerJob?.cancel()
-        detailsTickerJob = null
+        detailsSources.start(
+            ContextCompat.getMainExecutor(requireContext()),
+            viewLifecycleOwner.lifecycleScope,
+            permissionHandler.hasFinePermission()
+        )
     }
 
     private fun handlePermissionStateChange(state: LocationPermissionState) {
@@ -304,12 +260,11 @@ class ElevationFragment : Fragment() {
 
         // A fix without altitude would read as 0.0 and poison the average
         if (!location.hasAltitude()) return
-        // Skip fixes whose vertical error would drag the average around
-        if (location.hasVerticalAccuracy() &&
-            location.verticalAccuracyMeters > MAX_VERTICAL_ACCURACY_M
-        ) {
-            return
-        }
+        // Skip fixes whose vertical error would drag the average around. A fix
+        // that reports no vertical accuracy is kept: unknown is not the same as bad.
+        val reportedAccuracy = location.verticalAccuracyOrNull()
+        if (reportedAccuracy != null && reportedAccuracy > MAX_VERTICAL_ACCURACY_M) return
+
         val epoch = readingEpoch
         viewLifecycleOwner.lifecycleScope.launch {
             // Geoid data loads from disk on first use in a region
@@ -318,11 +273,8 @@ class ElevationFragment : Fragment() {
             }
             // The window was flushed while this fix was converting: drop it
             if (epoch != readingEpoch) return@launch
-            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
-                location.verticalAccuracyMeters
-            } else {
-                ElevationService.DEFAULT_VERTICAL_ACCURACY_M
-            }
+            val verticalAccuracy =
+                reportedAccuracy ?: ElevationService.DEFAULT_VERTICAL_ACCURACY_M
             elevationService.addElevationReading(elevation, verticalAccuracy)
             hasFix = true
             awaitingFreshFix = false
@@ -379,60 +331,32 @@ class ElevationFragment : Fragment() {
     private fun refreshDetails() {
         if (!showDetails || !::detailsPanel.isInitialized) return
 
-        val lines = mutableListOf<String>()
-        lines += getString(if (isIdle) R.string.detail_state_idle else R.string.detail_state_tracking)
-
-        val location = lastLocation
-        if (location == null) {
-            lines += getString(R.string.detail_no_fix)
-        } else {
-            if (location.hasMslAltitude()) {
-                lines += getString(R.string.detail_msl, formatLength(location.mslAltitudeMeters))
-            }
-            lines += getString(R.string.detail_ellipsoid, formatLength(location.altitude))
-            if (location.hasMslAltitude()) {
-                lines += getString(
-                    R.string.detail_geoid_offset,
-                    formatLength(location.altitude - location.mslAltitudeMeters)
-                )
-            }
-            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
-                formatLength(location.verticalAccuracyMeters.toDouble())
-            } else {
-                "?"
-            }
-            val horizontalAccuracy = if (location.hasAccuracy()) {
-                formatLength(location.accuracy.toDouble())
-            } else {
-                "?"
-            }
-            lines += getString(R.string.detail_accuracy, verticalAccuracy, horizontalAccuracy)
-            lines += getString(
-                R.string.detail_position,
-                location.latitude.fmt(5),
-                location.longitude.fmt(5)
+        val rows = DetailsPanelPresenter.rows(
+            DetailsPanelPresenter.Input(
+                isIdle = isIdle,
+                location = lastLocation,
+                nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
+                satellitesUsed = detailsSources.satellitesUsed,
+                satellitesVisible = detailsSources.satellitesVisible,
+                pressureHpa = detailsSources.pressureHpa,
+                readingCount = elevationService.snapshot().readingCount,
+                useMetric = useMetricUnit,
+                locale = Locale.getDefault()
             )
-            val fixAgeSeconds =
-                (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000
-            lines += getString(R.string.detail_fix_age, fixAgeSeconds)
-        }
-
-        lines += getString(R.string.detail_satellites, satellitesUsed, satellitesVisible)
-        lastPressureHpa?.let { pressure ->
-            lines += getString(R.string.detail_pressure, pressure.toDouble().fmt(1))
-        }
-        lines += getString(R.string.detail_readings, elevationService.snapshot().readingCount)
-
-        detailsPanel.text = lines.joinToString("\n")
+        )
+        detailsPanel.text = rows.joinToString("\n") { resolve(it) }
     }
 
-    private fun formatLength(meters: Double): String {
-        val detail = LengthFormatter.detail(meters, useMetricUnit, Locale.getDefault())
-        return getString(detail.templateRes, detail.valueText)
+    /** Resolves a presenter row, flattening the one nested length resource. */
+    private fun resolve(row: DetailsPanelPresenter.Row): String {
+        // Argument-less rows skip the formatting overload, which would choke on
+        // a translation containing a literal percent sign
+        if (row.args.isEmpty()) return getString(row.templateRes)
+        val args = row.args.map { arg ->
+            if (arg is LengthFormatter.Detail) getString(arg.templateRes, arg.valueText) else arg
+        }
+        return getString(row.templateRes, *args.toTypedArray())
     }
-
-    private fun Double.fmt(decimals: Int): String =
-        String.format(Locale.getDefault(), "%.${decimals}f", this)
 
     private fun stopLocationUpdates() {
         idleWakeMonitor.stop()
@@ -449,7 +373,7 @@ class ElevationFragment : Fragment() {
         requireContext().unregisterReceiver(providersChangedReceiver)
         locationOffDialog?.dismiss()
         locationOffDialog = null
-        stopDetailsSources()
+        detailsSources.stop()
         stopLocationUpdates()
         isIdle = false
     }
@@ -497,7 +421,8 @@ class ElevationFragment : Fragment() {
         // silently full-opacity fallthrough
         val textAlpha = when (state) {
             ReadingState.Dormant -> DIMMED_TEXT_ALPHA
-            is ReadingState.Converging -> 0.7f + 0.3f * state.progress
+            is ReadingState.Converging ->
+                DIMMED_TEXT_ALPHA + (1f - DIMMED_TEXT_ALPHA) * state.progress
             ReadingState.Acquiring, ReadingState.Stable -> 1f
         }
         elevationTextView.animate().alpha(textAlpha).setDuration(HERO_FADE_MS).start()

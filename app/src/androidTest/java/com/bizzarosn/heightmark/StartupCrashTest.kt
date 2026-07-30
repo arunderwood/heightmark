@@ -90,9 +90,4 @@ class StartupCrashTest : HiltUiTestBase() {
         }
     }
 
-    // Note: These tests are now covered by faster unit tests:
-    // - DependencyInjectionTest.preferencesRepositoryInitializationDoesNotCrash()
-    // - DependencyInjectionTest.elevationServiceInitializationDoesNotCrash()
-    // 
-    // Keeping only Android-specific integration tests here
 }

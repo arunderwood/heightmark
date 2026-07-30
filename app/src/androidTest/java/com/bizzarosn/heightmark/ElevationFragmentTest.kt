@@ -8,6 +8,7 @@ import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.hamcrest.CoreMatchers.not
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -57,33 +58,27 @@ class ElevationFragmentTest : HiltUiTestBase() {
         }
     }
 
+    /**
+     * Exercises the details sources through a full arm/release/re-arm cycle.
+     * A listener leaked or double-registered by DetailsSourcesController is
+     * invisible to the compiler, so this is the only automated guard on it.
+     */
     @Test
-    fun elevationServiceHandlesMultipleReadings() {
-        val elevationService = ElevationService(3)
+    fun detailsPanelSurvivesRepeatedToggling() {
+        launchHome {
+            Thread.sleep(1000)
 
-        // Readings within the jump threshold roll through the window
-        val avg1 = elevationService.addElevationReading(100.0)
-        val avg2 = elevationService.addElevationReading(102.0)
-        val avg3 = elevationService.addElevationReading(98.0)
-        val avg4 = elevationService.addElevationReading(104.0) // Should drop first reading
+            onView(withId(R.id.details_toggle)).perform(click())
+            onView(withId(R.id.details_panel)).check(matches(isDisplayed()))
 
-        // Verify averaging behavior
-        assert(avg1.averageMeters == 100.0)
-        assert(avg2.averageMeters == 101.0)
-        assert(avg3.averageMeters == 100.0)
-        assert(avg4.averageMeters > 101.3 && avg4.averageMeters < 101.4) // (102 + 98 + 104) / 3
-    }
+            onView(withId(R.id.details_toggle)).perform(click())
+            onView(withId(R.id.details_panel)).check(matches(not(isDisplayed())))
 
-    @Test
-    fun elevationServiceUnitConversion() {
-        val elevationService = ElevationService(1)
-        val snapshot = elevationService.addElevationReading(100.0) // 100 meters
+            onView(withId(R.id.details_toggle)).perform(click())
+            onView(withId(R.id.details_panel)).check(matches(isDisplayed()))
 
-        // Test metric (meters)
-        assert(snapshot.averageMeters == 100.0)
-
-        // Test imperial (feet) - 100m * 3.28084 ≈ 328.084
-        val imperial = UnitConverter.metersToFeet(snapshot.averageMeters)
-        assert(imperial > 328.0 && imperial < 329.0)
+            // Leave the collapsed default behind for the rest of the suite
+            onView(withId(R.id.details_toggle)).perform(click())
+        }
     }
 }

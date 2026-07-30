@@ -6,8 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -16,26 +19,28 @@ private object PreferencesKeys {
     val SHOW_DETAILS = booleanPreferencesKey("show_details")
 }
 
-class PreferencesRepository(context: Context) {
+@Singleton
+class PreferencesRepository @Inject constructor(@ApplicationContext context: Context) {
     private val dataStore = context.dataStore
 
-    val useMetricUnit: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PreferencesKeys.USE_METRIC_UNIT] != false
-    }
+    val useMetricUnit: Flow<Boolean> =
+        booleanFlow(PreferencesKeys.USE_METRIC_UNIT, default = true)
 
     suspend fun setUseMetricUnit(useMetric: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.USE_METRIC_UNIT] = useMetric
-        }
+        setBoolean(PreferencesKeys.USE_METRIC_UNIT, useMetric)
     }
 
-    val showDetails: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PreferencesKeys.SHOW_DETAILS] == true
-    }
+    val showDetails: Flow<Boolean> =
+        booleanFlow(PreferencesKeys.SHOW_DETAILS, default = false)
 
     suspend fun setShowDetails(show: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.SHOW_DETAILS] = show
-        }
+        setBoolean(PreferencesKeys.SHOW_DETAILS, show)
+    }
+
+    private fun booleanFlow(key: Preferences.Key<Boolean>, default: Boolean): Flow<Boolean> =
+        dataStore.data.map { preferences -> preferences[key] ?: default }
+
+    private suspend fun setBoolean(key: Preferences.Key<Boolean>, value: Boolean) {
+        dataStore.edit { preferences -> preferences[key] = value }
     }
 }

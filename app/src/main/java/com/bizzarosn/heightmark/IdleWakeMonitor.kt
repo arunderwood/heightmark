@@ -18,6 +18,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
+import javax.inject.Inject
 
 /**
  * Watches for the device leaving a stationary position while the GPS radio is
@@ -32,7 +33,7 @@ import java.util.concurrent.Executor
  *  - fallback GPS poll every few minutes, only on devices with no barometer,
  *    to catch vertical movement the other triggers can't see.
  */
-class IdleWakeMonitor(
+class IdleWakeMonitor @Inject constructor(
     private val locationManager: LocationManager,
     private val sensorManager: SensorManager,
     private val pressureDetector: PressureDeltaDetector
