@@ -136,7 +136,7 @@ class LocationPermissionHandler(
 
         showDialog(
             titleRes = R.string.location_permission_required,
-            messageRes = R.string.this_app_needs_location_permission_to_determine_your_elevation_without_this_permission_the_app_cannot_function,
+            messageRes = R.string.location_permission_rationale_message,
             positiveRes = R.string.grant_permission,
             onPositive = ::requestPermissions,
             negativeRes = R.string.exit_app,

@@ -21,7 +21,6 @@ class ElevationService(private val readingsCount: Int) {
     data class Snapshot(
         val averageMeters: Double, // NaN while the window is empty
         val readingCount: Int,
-        val windowSize: Int,
         val progress: Float,
         val settled: Boolean
     )
@@ -33,18 +32,25 @@ class ElevationService(private val readingsCount: Int) {
     private var pendingAbove = false
     private var settled = false
 
+    /**
+     * Adds a reading. A null [verticalAccuracyMeters] means the fix did not
+     * report one, which is not the same as reporting a bad one: the window
+     * substitutes [DEFAULT_VERTICAL_ACCURACY_M] so the jump and settle
+     * thresholds still have a scale to work from.
+     */
     fun addElevationReading(
         elevation: Double,
-        verticalAccuracyMeters: Float = DEFAULT_VERTICAL_ACCURACY_M
+        verticalAccuracyMeters: Float? = null
     ): Snapshot {
-        val reading = Reading(elevation, verticalAccuracyMeters)
+        val accuracy = verticalAccuracyMeters ?: DEFAULT_VERTICAL_ACCURACY_M
+        val reading = Reading(elevation, accuracy)
         if (window.isEmpty()) {
             append(reading)
             return snapshot()
         }
 
         val deviation = elevation - getAverageElevation()
-        val threshold = max(2.0 * verticalAccuracyMeters, JUMP_THRESHOLD_FLOOR_M)
+        val threshold = max(2.0 * accuracy, JUMP_THRESHOLD_FLOOR_M)
         if (abs(deviation) <= threshold) {
             pendingOutliers.clear()
             append(reading)
@@ -75,7 +81,6 @@ class ElevationService(private val readingsCount: Int) {
     fun snapshot(): Snapshot = Snapshot(
         averageMeters = getAverageElevation(),
         readingCount = window.size,
-        windowSize = readingsCount,
         progress = window.size.toFloat() / readingsCount,
         settled = settled
     )
@@ -107,6 +112,7 @@ class ElevationService(private val readingsCount: Int) {
     }
 
     companion object {
+        const val DEFAULT_WINDOW_SIZE = 10
         const val DEFAULT_VERTICAL_ACCURACY_M = 10f
         const val JUMP_CONFIRM_COUNT = 3
         const val JUMP_THRESHOLD_FLOOR_M = 8.0

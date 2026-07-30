@@ -1,9 +1,9 @@
 package com.bizzarosn.heightmark
 
 import android.content.Context
-import android.location.Location
 import android.location.altitude.AltitudeConverter
 import android.util.Log
+import com.bizzarosn.heightmark.TestLocations.altitudeFix
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -36,12 +36,9 @@ class AltitudeResolverTest {
         unmockkStatic(Log::class)
     }
 
-    private fun location(ellipsoid: Double, msl: Double? = null): Location =
-        TestLocations.altitudeFix(ellipsoid, msl)
-
     @Test
     fun `returns MSL altitude when conversion succeeds`() {
-        val location = location(ellipsoid = 100.0, msl = 121.5)
+        val location = altitudeFix(ellipsoid = 100.0, msl = 121.5)
         every { converter.addMslAltitudeToLocation(context, location) } just runs
 
         assertEquals(121.5, resolver.mslAltitudeMeters(location), 0.001)
@@ -49,7 +46,7 @@ class AltitudeResolverTest {
 
     @Test
     fun `falls back to ellipsoid altitude when converter does not populate MSL`() {
-        val location = location(ellipsoid = 100.0)
+        val location = altitudeFix(ellipsoid = 100.0)
         every { converter.addMslAltitudeToLocation(context, location) } just runs
 
         assertEquals(100.0, resolver.mslAltitudeMeters(location), 0.001)
@@ -57,7 +54,7 @@ class AltitudeResolverTest {
 
     @Test
     fun `falls back to ellipsoid altitude when geoid data cannot be loaded`() {
-        val location = location(ellipsoid = 100.0)
+        val location = altitudeFix(ellipsoid = 100.0)
         every { converter.addMslAltitudeToLocation(context, location) } throws IOException("no geoid data")
 
         assertEquals(100.0, resolver.mslAltitudeMeters(location), 0.001)
@@ -65,7 +62,7 @@ class AltitudeResolverTest {
 
     @Test
     fun `falls back to ellipsoid altitude when converter rejects the location`() {
-        val location = location(ellipsoid = 100.0)
+        val location = altitudeFix(ellipsoid = 100.0)
         every {
             converter.addMslAltitudeToLocation(context, location)
         } throws IllegalArgumentException("invalid latitude")

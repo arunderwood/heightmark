@@ -40,6 +40,21 @@ object TestLocations {
         return location
     }
 
+    /**
+     * A fix carrying only what the reading filter inspects: whether it has an
+     * altitude at all, and the vertical accuracy it reports (null for none).
+     */
+    fun fixForAdmission(
+        hasAltitude: Boolean = true,
+        verticalAccuracy: Float? = null
+    ): Location {
+        val location = mockk<Location>()
+        every { location.hasAltitude() } returns hasAltitude
+        every { location.hasVerticalAccuracy() } returns (verticalAccuracy != null)
+        verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
+        return location
+    }
+
     /** A fix carrying altitude data for geoid-conversion tests. */
     fun altitudeFix(ellipsoid: Double, msl: Double? = null): Location {
         val location = mockk<Location>()

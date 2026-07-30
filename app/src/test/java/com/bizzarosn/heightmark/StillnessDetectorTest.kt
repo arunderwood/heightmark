@@ -1,6 +1,6 @@
 package com.bizzarosn.heightmark
 
-import android.location.Location
+import com.bizzarosn.heightmark.TestLocations.movingFix
 import io.mockk.every
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,45 +14,42 @@ class StillnessDetectorTest {
         maxDriftMeters = 15f
     )
 
-    private fun fix(atMs: Long, speed: Float = 0f, driftMeters: Float = 0f): Location =
-        TestLocations.movingFix(atMs, speed, driftMeters)
-
     @Test
     fun `not stationary until the full window is covered`() {
-        assertFalse(detector.feed(fix(atMs = 0)))
-        assertFalse(detector.feed(fix(atMs = 10_000)))
-        assertFalse(detector.feed(fix(atMs = 20_000)))
-        assertTrue(detector.feed(fix(atMs = 30_000)))
+        assertFalse(detector.feed(movingFix(atMs = 0)))
+        assertFalse(detector.feed(movingFix(atMs = 10_000)))
+        assertFalse(detector.feed(movingFix(atMs = 20_000)))
+        assertTrue(detector.feed(movingFix(atMs = 30_000)))
     }
 
     @Test
     fun `movement above speed threshold restarts the window`() {
-        assertFalse(detector.feed(fix(atMs = 0)))
-        assertFalse(detector.feed(fix(atMs = 15_000, speed = 2f)))
+        assertFalse(detector.feed(movingFix(atMs = 0)))
+        assertFalse(detector.feed(movingFix(atMs = 15_000, speed = 2f)))
         // Window restarted: 30s must elapse from the next still fix
-        assertFalse(detector.feed(fix(atMs = 20_000)))
-        assertFalse(detector.feed(fix(atMs = 45_000)))
-        assertTrue(detector.feed(fix(atMs = 50_000)))
+        assertFalse(detector.feed(movingFix(atMs = 20_000)))
+        assertFalse(detector.feed(movingFix(atMs = 45_000)))
+        assertTrue(detector.feed(movingFix(atMs = 50_000)))
     }
 
     @Test
     fun `position drift beyond threshold restarts the window`() {
-        val anchor = fix(atMs = 0)
+        val anchor = movingFix(atMs = 0)
         every { anchor.distanceTo(any()) } returns 20f
         assertFalse(detector.feed(anchor))
-        assertFalse(detector.feed(fix(atMs = 31_000)))
+        assertFalse(detector.feed(movingFix(atMs = 31_000)))
         // Drift detected relative to the anchor; window restarted
-        assertFalse(detector.feed(fix(atMs = 40_000)))
-        assertFalse(detector.feed(fix(atMs = 60_000)))
-        assertTrue(detector.feed(fix(atMs = 70_000)))
+        assertFalse(detector.feed(movingFix(atMs = 40_000)))
+        assertFalse(detector.feed(movingFix(atMs = 60_000)))
+        assertTrue(detector.feed(movingFix(atMs = 70_000)))
     }
 
     @Test
     fun `reset clears accumulated stillness`() {
-        assertFalse(detector.feed(fix(atMs = 0)))
+        assertFalse(detector.feed(movingFix(atMs = 0)))
         detector.reset()
-        assertFalse(detector.feed(fix(atMs = 30_000)))
-        assertFalse(detector.feed(fix(atMs = 59_000)))
-        assertTrue(detector.feed(fix(atMs = 60_000)))
+        assertFalse(detector.feed(movingFix(atMs = 30_000)))
+        assertFalse(detector.feed(movingFix(atMs = 59_000)))
+        assertTrue(detector.feed(movingFix(atMs = 60_000)))
     }
 }
