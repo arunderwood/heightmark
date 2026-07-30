@@ -122,21 +122,20 @@ class ElevationFragment : Fragment() {
             permissionHandler.checkPermission()
         }
 
+        // Both toggles repaint first and persist after: a DataStore write goes
+        // to disk, and neither the new units nor the panel should wait on it
         unitToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (!isChecked) return@addOnButtonCheckedListener
             useMetricUnit = checkedId == R.id.button_meters
-            lifecycleScope.launch {
-                preferencesRepository.setUseMetricUnit(useMetricUnit)
-                updateUIWithElevation()
-                refreshDetails()
-            }
+            updateUIWithElevation()
+            refreshDetails()
+            lifecycleScope.launch { preferencesRepository.setUseMetricUnit(useMetricUnit) }
         }
 
         detailsToggle.setOnClickListener {
-            lifecycleScope.launch {
-                preferencesRepository.setShowDetails(!showDetails)
-                applyDetailsVisibility(!showDetails)
-            }
+            val show = !showDetails
+            applyDetailsVisibility(show)
+            lifecycleScope.launch { preferencesRepository.setShowDetails(show) }
         }
 
         return view
