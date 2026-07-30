@@ -30,5 +30,23 @@ sealed interface ReadingState {
             snapshot.settled -> Stable
             else -> Converging(snapshot.progress)
         }
+
+        /**
+         * Opacity for the hero number in [state]. Converging ramps from dimmed
+         * to full as the window fills, so the number visibly firms up.
+         *
+         * Exhaustive so a new [ReadingState] is a compile error here, not a
+         * silently full-opacity fallthrough.
+         */
+        fun heroAlpha(state: ReadingState): Float = when (state) {
+            Dormant -> DIMMED_TEXT_ALPHA
+            is Converging -> DIMMED_TEXT_ALPHA + (1f - DIMMED_TEXT_ALPHA) * state.progress
+            Acquiring, Stable -> 1f
+        }
+
+        // 0.7 keeps the dimmed (large-text) hero >= 3:1 over the scrim floor
+        // in day mode; verified by ScrimContrastTest, which references this
+        // constant directly.
+        internal const val DIMMED_TEXT_ALPHA = 0.7f
     }
 }

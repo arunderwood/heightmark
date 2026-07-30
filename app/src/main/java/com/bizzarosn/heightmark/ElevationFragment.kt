@@ -417,15 +417,10 @@ class ElevationFragment : Fragment() {
         )
         stabilityLine.isVisible = true
         stabilityLine.setState(state)
-        // Exhaustive so a new ReadingState is a compile error here, not a
-        // silently full-opacity fallthrough
-        val textAlpha = when (state) {
-            ReadingState.Dormant -> DIMMED_TEXT_ALPHA
-            is ReadingState.Converging ->
-                DIMMED_TEXT_ALPHA + (1f - DIMMED_TEXT_ALPHA) * state.progress
-            ReadingState.Acquiring, ReadingState.Stable -> 1f
-        }
-        elevationTextView.animate().alpha(textAlpha).setDuration(HERO_FADE_MS).start()
+        elevationTextView.animate()
+            .alpha(ReadingState.heroAlpha(state))
+            .setDuration(HERO_FADE_MS)
+            .start()
     }
 
     // Errors get explanatory status text; a kinetic signal widget alongside
@@ -541,10 +536,5 @@ class ElevationFragment : Fragment() {
         private const val MAX_VERTICAL_ACCURACY_M = 50f
         private const val RESET_AFTER_GAP_MS = 30_000L
         private const val HERO_FADE_MS = 250L
-
-        // 0.7 keeps the dimmed (large-text) hero >= 3:1 over the scrim floor
-        // in day mode; verified by ScrimContrastTest, which references this
-        // constant directly.
-        internal const val DIMMED_TEXT_ALPHA = 0.7f
     }
 }

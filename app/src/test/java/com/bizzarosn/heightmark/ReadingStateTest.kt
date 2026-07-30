@@ -69,4 +69,31 @@ class ReadingStateTest {
         )
         assertEquals(ReadingState.Converging(0.3f), state)
     }
+
+    @Test
+    fun `a dormant reading dims the hero`() {
+        assertEquals(
+            ReadingState.DIMMED_TEXT_ALPHA,
+            ReadingState.heroAlpha(ReadingState.Dormant),
+            0f
+        )
+    }
+
+    @Test
+    fun `converging ramps the hero from dimmed to full as the window fills`() {
+        val dimmed = ReadingState.DIMMED_TEXT_ALPHA
+        assertEquals(dimmed, ReadingState.heroAlpha(ReadingState.Converging(0f)), 1e-6f)
+        assertEquals(
+            dimmed + (1f - dimmed) / 2f,
+            ReadingState.heroAlpha(ReadingState.Converging(0.5f)),
+            1e-6f
+        )
+        assertEquals(1f, ReadingState.heroAlpha(ReadingState.Converging(1f)), 1e-6f)
+    }
+
+    @Test
+    fun `acquiring and stable show the hero at full opacity`() {
+        assertEquals(1f, ReadingState.heroAlpha(ReadingState.Acquiring), 0f)
+        assertEquals(1f, ReadingState.heroAlpha(ReadingState.Stable), 0f)
+    }
 }

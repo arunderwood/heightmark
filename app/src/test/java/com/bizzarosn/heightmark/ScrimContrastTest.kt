@@ -54,7 +54,7 @@ class ScrimContrastTest {
 
     @Test
     fun `dormant-dimmed hero number meets large-text 3 to 1`() {
-        val dimmed = whiteAtAlpha(ElevationFragment.DIMMED_TEXT_ALPHA)
+        val dimmed = whiteAtAlpha(ReadingState.DIMMED_TEXT_ALPHA)
         assertAtLeast(3.0, contrast(dimmed, scrimmedBackdrop), "hero at DIMMED_TEXT_ALPHA")
     }
 
