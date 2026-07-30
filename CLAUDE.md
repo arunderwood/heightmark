@@ -41,11 +41,12 @@ The app is a single screen (`ElevationFragment`) plus a set of focused collabora
 
 - **HeightMarkApplication**: `@HiltAndroidApp` Application; applies Material `DynamicColors` to all activities
 - **MainActivity**: `@AndroidEntryPoint` entry point; splash screen (`installSplashScreen`), `enableEdgeToEdge`, Navigation Component with a single-destination `BottomNavigationView`
-- **ElevationFragment**: The app's UI and orchestration — owns the GPS lifecycle, permission handling, stillness/idle duty-cycling, epoch-guarded MSL conversion, unit toggle, and reading-state → UI mapping. It has no ViewModel, so its state does not survive rotation
+- **ElevationFragment**: The app's UI and orchestration — owns the GPS listener lifecycle, permission handling, dialogs, the unit toggle, and the render path. Domain policy lives in `ElevationSession`; the fragment drives it and maps the result to views. It has no ViewModel, so its state does not survive rotation
 - **DetailsPanelPresenter**: Pure-JVM builder for the diagnostic panel's lines; takes an `Input` snapshot (including the clock, so it stays JVM-testable) and returns `Row`s of `@StringRes` + args for the fragment to resolve
 - **DetailsSourcesController**: Registers and releases the panel-only feeds (GNSS satellite counts, barometer, 1 Hz fix-age ticker). Each source arms independently so one that could not start — usually the GNSS callback, which needs fine location — is retried on the next `start()`; `stop()` deliberately keeps the last-known values
 - **ElevationService**: Rolling average of elevation readings with jump re-anchoring — sustained same-side outliers (elevator, stairs) flush and re-seed the window so the display snaps to the new level; exposes a `Snapshot` with window fill progress and a latched `settled` flag
-- **ReadingState**: Sealed interface (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; drives the settling line and the hero number's opacity
+- **ElevationSession**: The tracking session's domain policy, pure JVM — which fixes are worth averaging (altitude present, vertical accuracy within `MAX_VERTICAL_ACCURACY_M`), the duty-cycle flags, the epoch that drops a geoid conversion racing a window flush, the background-gap reset, and the last value held on screen across a flush. Takes the clock as an input rather than calling `SystemClock`, following `DetailsPanelPresenter`
+- **ReadingState**: Sealed interface (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; drives the settling line, and owns the state → hero-opacity mapping (`heroAlpha`, `DIMMED_TEXT_ALPHA`)
 - **StabilityLineView**: The "settling line" — a canvas-drawn kinetic line under the elevation number: traveling wave while acquiring, flattening/brightening core while converging, breathing glow when stable, motionless dotted line (with dimmed number) when the reading is dormant/stale
 - **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data); falls back to ellipsoid height if geoid data fails to load
 - **StillnessDetector**: Declares the device stationary from GNSS fix speed/drift over a 30s window
@@ -53,18 +54,18 @@ The app is a single screen (`ElevationFragment`) plus a set of focused collabora
 - **PressureDeltaDetector**: Sustained-pressure-change detection with weather-drift absorption and HVAC/door-transient rejection
 - **LocationPermissionHandler**: Lifecycle-aware permission handler with state management, including the Android 12+ coarse-only ("approximate") grant state
 - **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel)
-- **LengthFormatter**: The single home of the metric/imperial branch — value conversion, number formatting, and unit-resource selection; returns resource IDs for callers to resolve
+- **LengthFormatter**: The single home of the metric/imperial branch — value conversion, number formatting, and unit-resource selection. Returns resource IDs for callers to resolve: `Detail` for a panel row, `Hero` for the big number, each pairing a value with the unit that names it
 - **LocationPermissionPolicy**: Pure decision table mapping grant state to a `Resolution` (report a state, show a dialog, or re-request)
 - **UnitConverter**: `object` holding `FEET_PER_METER` and `metersToFeet()`
-- **LocationAccuracy.kt / SensorListeners.kt**: Top-level extension helpers — nullable accuracy accessors, and a `SensorEventListener` from a single lambda
+- **LocationAccuracy.kt / SensorListeners.kt**: Top-level extension helpers — nullable accuracy accessors; a `SensorEventListener` from a single lambda, and `registerPressureListener` for the barometer arming both `IdleWakeMonitor` and `DetailsSourcesController` need
 
 ### Dependency Injection
 
-The app uses **Hilt**. `PreferencesRepository` (`@Singleton`) and `IdleWakeMonitor` carry `@Inject constructor`. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) holds only the bindings Dagger cannot derive:
+The app uses **Hilt**. `PreferencesRepository` (`@Singleton`), `IdleWakeMonitor`, and `ElevationSession` carry `@Inject constructor`. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) holds only the bindings Dagger cannot derive:
 - Singletons: `LocationManager`, `SensorManager` (both via `getSystemService`), `AltitudeResolver` (its defaulted `converter` param is the seam `AltitudeResolverTest` injects a fake through)
-- Unscoped: `ElevationService(readingsCount = 10)`, `StillnessDetector`, `PressureDeltaDetector` — all have constructors made entirely of defaulted tuning values, and Dagger ignores Kotlin defaults
+- Unscoped: `ElevationService(readingsCount = ElevationService.DEFAULT_WINDOW_SIZE)`, `StillnessDetector`, `PressureDeltaDetector` — all have constructors made entirely of defaulted tuning values, and Dagger ignores Kotlin defaults
 
-Do not "simplify" the remaining five into `@Inject constructor`s; each would either break a test seam or make Dagger try to inject a `Long`/`Float`.
+Do not "simplify" the remaining five into `@Inject constructor`s; each would either break a test seam or make Dagger try to inject a `Long`/`Float`. `ElevationSession` avoids that trap precisely because its clock is an argument to `onPaused`/`onResumed` rather than a defaulted tuning parameter on the constructor — keep it that way.
 
 `@AndroidEntryPoint` is applied to `MainActivity` and `ElevationFragment`; the fragment `@Inject`s seven dependencies. `LocationPermissionHandler` and `DetailsSourcesController` are constructed directly in the fragment, not injected.
 
@@ -95,7 +96,7 @@ Accessibility is enforced at three layers; all of them fail the build/CI on viol
 
 1. **Lint**: `app/lint.xml` promotes the entire `Accessibility` lint category to `error`, and `lint { abortOnError = true }` in `app/build.gradle.kts`
 2. **Runtime checks**: the custom `HiltTestRunner` globally enables Accessibility Test Framework checks from the root view, so **every Espresso interaction** in every instrumented test validates the full view hierarchy
-3. **Contrast tests**: `ScrimContrastTest` (unit test) computes WCAG 2.1 contrast ratios from constants referenced directly in production source (`ElevationFragment.DIMMED_TEXT_ALPHA`, `StabilityLineView` alpha constants, `hm_*` color resources). Changing those constants or colors can fail unit tests — that is by design.
+3. **Contrast tests**: `ScrimContrastTest` (unit test) computes WCAG 2.1 contrast ratios from constants referenced directly in production source (`ReadingState.DIMMED_TEXT_ALPHA`, `StabilityLineView` alpha constants, `hm_*` color resources). Changing those constants or colors can fail unit tests — that is by design.
 
 ## Release Process
 
@@ -131,7 +132,7 @@ Revert the problematic commit on main (`git revert <sha>`, or `git revert -m 1 <
 
 ### Unit Tests (`app/src/test/`)
 
-Pure-JVM tests covering the core logic: `ElevationServiceTest` (rolling average, jump re-anchoring, settled latching), `AltitudeResolverTest` (MSL conversion + ellipsoid fallbacks, mocked `AltitudeConverter`), `DetailsPanelPresenterTest` (details-panel row set and order), `StillnessDetectorTest`, `PressureDeltaDetectorTest`, `ReadingStateTest` (state derivation precedence), `LocationPermissionPolicyTest` (permission decision table), `ScrimContrastTest` (WCAG contrast — see Accessibility Gates), `LengthFormatterTest`, `LocationAccuracyTest`, `UnitConverterTest`. Shared mockk `Location` factories live in `TestLocations`.
+Pure-JVM tests covering the core logic: `ElevationServiceTest` (rolling average, jump re-anchoring, settled latching), `ElevationSessionTest` (fix admission, the epoch guard against a conversion racing a flush, duty-cycle and background-gap policy), `AltitudeResolverTest` (MSL conversion + ellipsoid fallbacks, mocked `AltitudeConverter`), `DetailsPanelPresenterTest` (details-panel row set and order), `StillnessDetectorTest`, `PressureDeltaDetectorTest`, `ReadingStateTest` (state derivation precedence), `LocationPermissionPolicyTest` (permission decision table), `ScrimContrastTest` (WCAG contrast — see Accessibility Gates), `LengthFormatterTest`, `LocationAccuracyTest`, `UnitConverterTest`. Shared mockk `Location` factories live in `TestLocations`.
 
 Tests assert behavior, not language semantics. Reflection checks that a constructor exists, that a class is not abstract, or that a sealed `object` equals itself are guaranteed by the compiler and do not belong here.
 
@@ -141,7 +142,7 @@ Tests assert behavior, not language semantics. Reflection checks that a construc
 - **AccessibilityChecksTest**: drives interactive states in both day and night uiMode so ATF validates each
 - **ElevationFragmentTest**: UI interactions (fine+coarse granted), including the details-panel toggle cycle that exercises `DetailsSourcesController`'s arm/release/re-arm path — a leaked or double-registered listener is invisible to the compiler and to the unit tests
 - **LocationPermissionTest**: three classes in one file (`LocationPermissionTest`, `CoarseLocationPermissionTest`, `BothLocationPermissionsTest`) covering the different grant combinations
-- **StartupCrashTest**: crash detection and component initialization validation
+- **StartupCrashTest**: crash detection and component initialization validation; all three cases go through `HiltUiTestBase.launchHome()`, whose Espresso check syncs on the looper — do not reintroduce `Thread.sleep` inside `onActivity`, which blocks the very thread it appears to wait on
 
 All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering matters — `HiltAndroidRule` must be first (`order = 0`), `GrantPermissionRule` after it.
 
