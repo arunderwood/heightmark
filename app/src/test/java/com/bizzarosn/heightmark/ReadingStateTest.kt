@@ -12,7 +12,6 @@ class ReadingStateTest {
     ) = ElevationService.Snapshot(
         averageMeters = 100.0,
         readingCount = readingCount,
-        windowSize = windowSize,
         progress = readingCount.toFloat() / windowSize,
         settled = settled
     )

@@ -21,7 +21,6 @@ class ElevationService(private val readingsCount: Int) {
     data class Snapshot(
         val averageMeters: Double, // NaN while the window is empty
         val readingCount: Int,
-        val windowSize: Int,
         val progress: Float,
         val settled: Boolean
     )
@@ -82,7 +81,6 @@ class ElevationService(private val readingsCount: Int) {
     fun snapshot(): Snapshot = Snapshot(
         averageMeters = getAverageElevation(),
         readingCount = window.size,
-        windowSize = readingsCount,
         progress = window.size.toFloat() / readingsCount,
         settled = settled
     )
