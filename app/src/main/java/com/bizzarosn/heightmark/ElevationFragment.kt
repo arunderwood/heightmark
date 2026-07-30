@@ -497,7 +497,8 @@ class ElevationFragment : Fragment() {
         // silently full-opacity fallthrough
         val textAlpha = when (state) {
             ReadingState.Dormant -> DIMMED_TEXT_ALPHA
-            is ReadingState.Converging -> 0.7f + 0.3f * state.progress
+            is ReadingState.Converging ->
+                DIMMED_TEXT_ALPHA + (1f - DIMMED_TEXT_ALPHA) * state.progress
             ReadingState.Acquiring, ReadingState.Stable -> 1f
         }
         elevationTextView.animate().alpha(textAlpha).setDuration(HERO_FADE_MS).start()
