@@ -1,74 +1,43 @@
 package com.bizzarosn.heightmark
 
-import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import dagger.hilt.android.testing.HiltAndroidTest
-import org.junit.Test
-import org.junit.runner.RunWith
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import javax.inject.Inject
+import org.junit.Test
+import org.junit.runner.RunWith
 
+/**
+ * Startup smoke tests. A crash during launch or injection surfaces as a thrown
+ * exception out of [launchHome], which fails the test on its own — these add
+ * the checks that a silent bad state would otherwise pass: an activity that
+ * came up already finishing, or a fragment attached without a view.
+ */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
 class StartupCrashTest : HiltUiTestBase() {
 
-    @Inject
-    lateinit var preferencesRepository: PreferencesRepository
-
-    @Inject
-    lateinit var elevationService: ElevationService
-
     @Test
     fun mainActivityStartsSuccessfully() {
-        // This test specifically checks for startup crashes
-        var crashed = false
-        var scenario: ActivityScenario<MainActivity>? = null
-        
-        try {
-            scenario = ActivityScenario.launch(MainActivity::class.java)
-            
-            // Wait for activity to fully initialize
-            Thread.sleep(3000)
-            
+        launchHome { scenario ->
             scenario.onActivity { activity ->
-                // Verify activity is in a valid state
-                assertNotNull("Activity should not be null", activity)
                 assertFalse("Activity should not be finishing", activity.isFinishing)
                 assertFalse("Activity should not be destroyed", activity.isDestroyed)
             }
-            
-        } catch (e: Exception) {
-            crashed = true
-            fail("MainActivity crashed on startup: ${e.message}")
-        } finally {
-            scenario?.close()
         }
-        
-        assertFalse("App should not crash on startup", crashed)
     }
 
     @Test
     fun fragmentInitializationDoesNotCrash() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        launchHome { scenario ->
             scenario.onActivity { activity ->
-                // Verify the fragment manager is in a valid state
-                val fragmentManager = activity.supportFragmentManager
-                assertNotNull("Fragment manager should not be null", fragmentManager)
-                
-                // Wait for fragment initialization
-                Thread.sleep(2000)
-                
-                // Check that no fragments are in an error state
-                val fragments = fragmentManager.fragments
+                val fragments = activity.supportFragmentManager.fragments
+                assertTrue("The host should have a fragment", fragments.isNotEmpty())
                 for (fragment in fragments) {
-                    if (fragment != null) {
-                        assertNotNull("Fragment view should be created", fragment.view)
-                        assertTrue("Fragment should be added", fragment.isAdded)
-                        assertFalse("Fragment should not be detached", fragment.isDetached)
-                    }
+                    assertNotNull("Fragment view should be created", fragment.view)
+                    assertTrue("Fragment should be added", fragment.isAdded)
+                    assertFalse("Fragment should not be detached", fragment.isDetached)
                 }
             }
         }
@@ -76,18 +45,15 @@ class StartupCrashTest : HiltUiTestBase() {
 
     @Test
     fun permissionHandlerInitializationDoesNotCrash() {
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            // This test ensures that the permission handler initialization
-            // doesn't cause crashes during startup
-            
+        // The handler registers its ActivityResultLauncher in onCreate; a
+        // late registration throws and takes the activity down with it
+        launchHome { scenario ->
             scenario.onActivity { activity ->
-                // Wait for permission handler to initialize
-                Thread.sleep(1000)
-                
-                // Verify activity is still in a valid state after permission handler init
-                assertFalse("Activity should not be finishing after permission init", activity.isFinishing)
+                assertFalse(
+                    "Activity should not be finishing after permission init",
+                    activity.isFinishing
+                )
             }
         }
     }
-
 }

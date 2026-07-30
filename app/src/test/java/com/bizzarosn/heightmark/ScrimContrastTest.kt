@@ -106,10 +106,7 @@ class ScrimContrastTest {
     // ---- Resource parsing ---------------------------------------------------
 
     private fun resourceColor(name: String): Argb {
-        // Unit tests run with the module directory as the working directory
-        val xml = File("src/main/res/values/colors.xml").readText()
-        val hex = Regex("""<color name="$name">#([0-9A-Fa-f]{6,8})</color>""")
-            .find(xml)?.groupValues?.get(1)
+        val hex = colorHexByName[name]
             ?: error("Color resource '$name' not found in colors.xml")
         val argb = hex.padStart(8, 'F').toLong(16)
         return Argb(
@@ -120,5 +117,19 @@ class ScrimContrastTest {
                 (argb and 0xFF) / 255.0
             )
         )
+    }
+
+    private companion object {
+        /**
+         * colors.xml parsed once for the whole class rather than re-read and
+         * re-scanned per lookup. Unit tests run with the module directory as
+         * the working directory.
+         */
+        val colorHexByName: Map<String, String> by lazy {
+            val xml = File("src/main/res/values/colors.xml").readText()
+            Regex("""<color name="([^"]+)">#([0-9A-Fa-f]{6,8})</color>""")
+                .findAll(xml)
+                .associate { it.groupValues[1] to it.groupValues[2] }
+        }
     }
 }

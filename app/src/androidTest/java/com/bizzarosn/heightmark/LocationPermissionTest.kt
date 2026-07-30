@@ -12,6 +12,7 @@ import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.hamcrest.Matchers.not
 import org.junit.Assume.assumeFalse
 import org.junit.Rule
 import org.junit.Test
@@ -90,12 +91,17 @@ class BothLocationPermissionsTest : HiltUiTestBase() {
         launchHome {
             onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
 
-            // With permissions, the app should start location updates
-            // Wait a moment for the permission handler to initialize
+            // The permission check runs after an async preferences read
             Thread.sleep(2000)
 
-            // The elevation text should not show permission required message
-            // (This is a basic check - in a real scenario you'd mock location data)
+            // Both grants satisfy the fine-location requirement, so the hero
+            // must never land in either blocked state
+            onView(withId(R.id.elevation_text_view)).check(
+                matches(not(withText(R.string.location_permission_required)))
+            )
+            onView(withId(R.id.elevation_text_view)).check(
+                matches(not(withText(R.string.precise_location_required)))
+            )
         }
     }
 }

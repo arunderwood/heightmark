@@ -10,7 +10,17 @@ class ElevationServiceTest {
 
     @Before
     fun setUp() {
-        elevationService = ElevationService(3)
+        elevationService = ElevationService(WINDOW_SIZE)
+    }
+
+    /**
+     * Fills the window with three tight readings around 100 m, which both
+     * settles the latch and gives the jump detector an average to deviate from.
+     */
+    private fun seedSettledWindow() {
+        elevationService.addElevationReading(100.0)
+        elevationService.addElevationReading(101.0)
+        elevationService.addElevationReading(99.0)
     }
 
     @Test
@@ -56,8 +66,7 @@ class ElevationServiceTest {
         elevationService.addElevationReading(100.0)
         assertEquals(1, elevationService.snapshot().readingCount)
         repeat(5) { elevationService.addElevationReading(100.0) }
-        // Capped at the window size (3)
-        assertEquals(3, elevationService.snapshot().readingCount)
+        assertEquals("capped at the window size", WINDOW_SIZE, elevationService.snapshot().readingCount)
     }
 
     @Test
@@ -72,9 +81,7 @@ class ElevationServiceTest {
 
     @Test
     fun `single spike is excluded from the average`() {
-        elevationService.addElevationReading(100.0)
-        elevationService.addElevationReading(101.0)
-        elevationService.addElevationReading(99.0)
+        seedSettledWindow()
 
         // 40 m above the average: an outlier, held out of the window
         val result = elevationService.addElevationReading(140.0)
@@ -84,9 +91,7 @@ class ElevationServiceTest {
 
     @Test
     fun `pending outliers are discarded when readings return to the average`() {
-        elevationService.addElevationReading(100.0)
-        elevationService.addElevationReading(101.0)
-        elevationService.addElevationReading(99.0)
+        seedSettledWindow()
 
         elevationService.addElevationReading(140.0)
         elevationService.addElevationReading(141.0)
@@ -102,9 +107,7 @@ class ElevationServiceTest {
 
     @Test
     fun `three consecutive same-side outliers flush and re-anchor the average`() {
-        elevationService.addElevationReading(100.0)
-        elevationService.addElevationReading(101.0)
-        elevationService.addElevationReading(99.0)
+        seedSettledWindow()
 
         elevationService.addElevationReading(150.0)
         elevationService.addElevationReading(151.0)
@@ -133,9 +136,7 @@ class ElevationServiceTest {
 
     @Test
     fun `sign flip restarts the pending outlier run`() {
-        elevationService.addElevationReading(100.0)
-        elevationService.addElevationReading(101.0)
-        elevationService.addElevationReading(99.0)
+        seedSettledWindow()
 
         elevationService.addElevationReading(140.0) // above
         elevationService.addElevationReading(60.0) // below: restart
@@ -200,7 +201,7 @@ class ElevationServiceTest {
 
     @Test
     fun `settled is not latched when the full window is loose`() {
-        val service = ElevationService(3)
+        val service = ElevationService(WINDOW_SIZE)
         // In-band readings whose stddev (~8.3 m) exceeds max(4, 0.75 x 10 m)
         service.addElevationReading(100.0)
         service.addElevationReading(113.0)
@@ -226,14 +227,17 @@ class ElevationServiceTest {
 
     @Test
     fun `first reading after reset is accepted regardless of distance`() {
-        elevationService.addElevationReading(100.0)
-        elevationService.addElevationReading(101.0)
-        elevationService.addElevationReading(99.0)
+        seedSettledWindow()
 
         elevationService.reset()
 
         val result = elevationService.addElevationReading(500.0)
         assertEquals(500.0, result.averageMeters, 0.001)
         assertEquals(1, result.readingCount)
+    }
+
+    private companion object {
+        /** Small enough that a full, settled window is three calls away. */
+        const val WINDOW_SIZE = 3
     }
 }
