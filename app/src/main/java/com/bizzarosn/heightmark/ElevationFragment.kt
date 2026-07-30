@@ -304,12 +304,11 @@ class ElevationFragment : Fragment() {
 
         // A fix without altitude would read as 0.0 and poison the average
         if (!location.hasAltitude()) return
-        // Skip fixes whose vertical error would drag the average around
-        if (location.hasVerticalAccuracy() &&
-            location.verticalAccuracyMeters > MAX_VERTICAL_ACCURACY_M
-        ) {
-            return
-        }
+        // Skip fixes whose vertical error would drag the average around. A fix
+        // that reports no vertical accuracy is kept: unknown is not the same as bad.
+        val reportedAccuracy = location.verticalAccuracyOrNull()
+        if (reportedAccuracy != null && reportedAccuracy > MAX_VERTICAL_ACCURACY_M) return
+
         val epoch = readingEpoch
         viewLifecycleOwner.lifecycleScope.launch {
             // Geoid data loads from disk on first use in a region
@@ -318,11 +317,8 @@ class ElevationFragment : Fragment() {
             }
             // The window was flushed while this fix was converting: drop it
             if (epoch != readingEpoch) return@launch
-            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
-                location.verticalAccuracyMeters
-            } else {
-                ElevationService.DEFAULT_VERTICAL_ACCURACY_M
-            }
+            val verticalAccuracy =
+                reportedAccuracy ?: ElevationService.DEFAULT_VERTICAL_ACCURACY_M
             elevationService.addElevationReading(elevation, verticalAccuracy)
             hasFix = true
             awaitingFreshFix = false
