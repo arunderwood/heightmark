@@ -375,60 +375,32 @@ class ElevationFragment : Fragment() {
     private fun refreshDetails() {
         if (!showDetails || !::detailsPanel.isInitialized) return
 
-        val lines = mutableListOf<String>()
-        lines += getString(if (isIdle) R.string.detail_state_idle else R.string.detail_state_tracking)
-
-        val location = lastLocation
-        if (location == null) {
-            lines += getString(R.string.detail_no_fix)
-        } else {
-            if (location.hasMslAltitude()) {
-                lines += getString(R.string.detail_msl, formatLength(location.mslAltitudeMeters))
-            }
-            lines += getString(R.string.detail_ellipsoid, formatLength(location.altitude))
-            if (location.hasMslAltitude()) {
-                lines += getString(
-                    R.string.detail_geoid_offset,
-                    formatLength(location.altitude - location.mslAltitudeMeters)
-                )
-            }
-            val verticalAccuracy = if (location.hasVerticalAccuracy()) {
-                formatLength(location.verticalAccuracyMeters.toDouble())
-            } else {
-                "?"
-            }
-            val horizontalAccuracy = if (location.hasAccuracy()) {
-                formatLength(location.accuracy.toDouble())
-            } else {
-                "?"
-            }
-            lines += getString(R.string.detail_accuracy, verticalAccuracy, horizontalAccuracy)
-            lines += getString(
-                R.string.detail_position,
-                location.latitude.fmt(5),
-                location.longitude.fmt(5)
+        val rows = DetailsPanelPresenter.rows(
+            DetailsPanelPresenter.Input(
+                isIdle = isIdle,
+                location = lastLocation,
+                nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
+                satellitesUsed = satellitesUsed,
+                satellitesVisible = satellitesVisible,
+                pressureHpa = lastPressureHpa,
+                readingCount = elevationService.snapshot().readingCount,
+                useMetric = useMetricUnit,
+                locale = Locale.getDefault()
             )
-            val fixAgeSeconds =
-                (SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos) / 1_000_000_000
-            lines += getString(R.string.detail_fix_age, fixAgeSeconds)
-        }
-
-        lines += getString(R.string.detail_satellites, satellitesUsed, satellitesVisible)
-        lastPressureHpa?.let { pressure ->
-            lines += getString(R.string.detail_pressure, pressure.toDouble().fmt(1))
-        }
-        lines += getString(R.string.detail_readings, elevationService.snapshot().readingCount)
-
-        detailsPanel.text = lines.joinToString("\n")
+        )
+        detailsPanel.text = rows.joinToString("\n") { resolve(it) }
     }
 
-    private fun formatLength(meters: Double): String {
-        val detail = LengthFormatter.detail(meters, useMetricUnit, Locale.getDefault())
-        return getString(detail.templateRes, detail.valueText)
+    /** Resolves a presenter row, flattening the one nested length resource. */
+    private fun resolve(row: DetailsPanelPresenter.Row): String {
+        // Argument-less rows skip the formatting overload, which would choke on
+        // a translation containing a literal percent sign
+        if (row.args.isEmpty()) return getString(row.templateRes)
+        val args = row.args.map { arg ->
+            if (arg is LengthFormatter.Detail) getString(arg.templateRes, arg.valueText) else arg
+        }
+        return getString(row.templateRes, *args.toTypedArray())
     }
-
-    private fun Double.fmt(decimals: Int): String =
-        String.format(Locale.getDefault(), "%.${decimals}f", this)
 
     private fun stopLocationUpdates() {
         idleWakeMonitor.stop()
