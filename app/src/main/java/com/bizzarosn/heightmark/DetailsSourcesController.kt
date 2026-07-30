@@ -1,6 +1,5 @@
 package com.bizzarosn.heightmark
 
-import android.hardware.Sensor
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.GnssStatus
@@ -55,15 +54,11 @@ class DetailsSourcesController(
         }
 
         if (pressureListener == null) {
-            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sensor ->
-                val listener = sensorListener { event -> pressureHpa = event.values[0] }
-                if (sensorManager.registerListener(
-                        listener, sensor, SensorManager.SENSOR_DELAY_UI
-                    )
-                ) {
-                    pressureListener = listener
-                }
-            }
+            // The panel repaints on a 1 s ticker anyway, so UI rate is plenty —
+            // IdleWakeMonitor samples the same sensor faster to catch elevators
+            pressureListener = sensorManager.registerPressureListener(
+                SensorManager.SENSOR_DELAY_UI
+            ) { pressureHpa = it }
         }
 
         if (tickerJob == null) {

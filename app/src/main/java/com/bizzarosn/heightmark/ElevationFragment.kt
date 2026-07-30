@@ -446,12 +446,13 @@ class ElevationFragment : Fragment() {
                 // would make TalkBack announce every tick. Screen-reader users read
                 // the value on focus instead, with the unit spoken in full.
                 elevationTextView.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_NONE
-                val rounded = LengthFormatter.heroValue(mode.meters, useMetricUnit)
-                val unit = getString(LengthFormatter.unitRes(useMetricUnit))
-                elevationTextView.text = getString(R.string.elevation_text, rounded, unit)
-                val spokenUnit = getString(LengthFormatter.spokenUnitRes(useMetricUnit))
-                elevationTextView.contentDescription =
-                    getString(R.string.elevation_a11y, rounded, spokenUnit)
+                val hero = LengthFormatter.hero(mode.meters, useMetricUnit)
+                elevationTextView.text = getString(
+                    R.string.elevation_text, hero.value, getString(hero.unitRes)
+                )
+                elevationTextView.contentDescription = getString(
+                    R.string.elevation_a11y, hero.value, getString(hero.spokenUnitRes)
+                )
             }
         }
     }

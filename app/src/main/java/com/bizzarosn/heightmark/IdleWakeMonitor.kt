@@ -113,20 +113,13 @@ class IdleWakeMonitor @Inject constructor(
 
     /** Returns true if a barometer is present and armed. */
     private fun armBarometer(): Boolean {
-        val sensor = sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE) ?: return false
-        val listener = sensorListener { event ->
-            if (pressureDetector.feed(event.values[0])) {
+        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) {
+            if (pressureDetector.feed(it)) {
                 Log.d(TAG, "Sustained pressure change detected")
                 wake()
             }
         }
-        val registered = sensorManager.registerListener(
-            listener, sensor, PRESSURE_SAMPLING_PERIOD_US
-        )
-        if (registered) {
-            pressureListener = listener
-        }
-        return registered
+        return pressureListener != null
     }
 
     @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
