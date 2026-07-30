@@ -4,10 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.Sensor
-import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.location.GnssStatus
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -85,14 +82,9 @@ class ElevationFragment : Fragment() {
     private var showDetails = false
     private var isIdle = false
     private var lastLocation: Location? = null
-    private var satellitesUsed = 0
-    private var satellitesVisible = 0
-    private var lastPressureHpa: Float? = null
-    private var gnssStatusCallback: GnssStatus.Callback? = null
-    private var pressurePanelListener: SensorEventListener? = null
-    private var detailsTickerJob: Job? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
+    private lateinit var detailsSources: DetailsSourcesController
 
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -116,6 +108,10 @@ class ElevationFragment : Fragment() {
             handlePermissionStateChange(state)
         }
         permissionHandler.initialize()
+
+        detailsSources = DetailsSourcesController(locationManager, sensorManager) {
+            refreshDetails()
+        }
     }
 
 
@@ -168,56 +164,16 @@ class ElevationFragment : Fragment() {
             startDetailsSources()
             refreshDetails()
         } else {
-            stopDetailsSources()
+            detailsSources.stop()
         }
     }
 
-    /** Extra data feeds (satellites, pressure, fix-age ticker) used only by the panel. */
     private fun startDetailsSources() {
-        if (gnssStatusCallback == null && permissionHandler.hasFinePermission()) {
-            val callback = object : GnssStatus.Callback() {
-                override fun onSatelliteStatusChanged(status: GnssStatus) {
-                    satellitesVisible = status.satelliteCount
-                    satellitesUsed = (0 until status.satelliteCount).count { status.usedInFix(it) }
-                    refreshDetails()
-                }
-            }
-            try {
-                locationManager.registerGnssStatusCallback(
-                    ContextCompat.getMainExecutor(requireContext()), callback
-                )
-                gnssStatusCallback = callback
-            } catch (e: SecurityException) {
-                Log.e(TAG, "Cannot register GnssStatus callback", e)
-            }
-        }
-
-        if (pressurePanelListener == null) {
-            sensorManager.getDefaultSensor(Sensor.TYPE_PRESSURE)?.let { sensor ->
-                val listener = sensorListener { event -> lastPressureHpa = event.values[0] }
-                if (sensorManager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)) {
-                    pressurePanelListener = listener
-                }
-            }
-        }
-
-        if (detailsTickerJob == null) {
-            detailsTickerJob = viewLifecycleOwner.lifecycleScope.launch {
-                while (true) {
-                    delay(1_000)
-                    refreshDetails()
-                }
-            }
-        }
-    }
-
-    private fun stopDetailsSources() {
-        gnssStatusCallback?.let { locationManager.unregisterGnssStatusCallback(it) }
-        gnssStatusCallback = null
-        pressurePanelListener?.let { sensorManager.unregisterListener(it) }
-        pressurePanelListener = null
-        detailsTickerJob?.cancel()
-        detailsTickerJob = null
+        detailsSources.start(
+            ContextCompat.getMainExecutor(requireContext()),
+            viewLifecycleOwner.lifecycleScope,
+            permissionHandler.hasFinePermission()
+        )
     }
 
     private fun handlePermissionStateChange(state: LocationPermissionState) {
@@ -380,9 +336,9 @@ class ElevationFragment : Fragment() {
                 isIdle = isIdle,
                 location = lastLocation,
                 nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
-                satellitesUsed = satellitesUsed,
-                satellitesVisible = satellitesVisible,
-                pressureHpa = lastPressureHpa,
+                satellitesUsed = detailsSources.satellitesUsed,
+                satellitesVisible = detailsSources.satellitesVisible,
+                pressureHpa = detailsSources.pressureHpa,
                 readingCount = elevationService.snapshot().readingCount,
                 useMetric = useMetricUnit,
                 locale = Locale.getDefault()
@@ -417,7 +373,7 @@ class ElevationFragment : Fragment() {
         requireContext().unregisterReceiver(providersChangedReceiver)
         locationOffDialog?.dismiss()
         locationOffDialog = null
-        stopDetailsSources()
+        detailsSources.stop()
         stopLocationUpdates()
         isIdle = false
     }
