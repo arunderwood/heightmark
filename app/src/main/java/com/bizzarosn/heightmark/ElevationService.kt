@@ -33,18 +33,25 @@ class ElevationService(private val readingsCount: Int) {
     private var pendingAbove = false
     private var settled = false
 
+    /**
+     * Adds a reading. A null [verticalAccuracyMeters] means the fix did not
+     * report one, which is not the same as reporting a bad one: the window
+     * substitutes [DEFAULT_VERTICAL_ACCURACY_M] so the jump and settle
+     * thresholds still have a scale to work from.
+     */
     fun addElevationReading(
         elevation: Double,
-        verticalAccuracyMeters: Float = DEFAULT_VERTICAL_ACCURACY_M
+        verticalAccuracyMeters: Float? = null
     ): Snapshot {
-        val reading = Reading(elevation, verticalAccuracyMeters)
+        val accuracy = verticalAccuracyMeters ?: DEFAULT_VERTICAL_ACCURACY_M
+        val reading = Reading(elevation, accuracy)
         if (window.isEmpty()) {
             append(reading)
             return snapshot()
         }
 
         val deviation = elevation - getAverageElevation()
-        val threshold = max(2.0 * verticalAccuracyMeters, JUMP_THRESHOLD_FLOOR_M)
+        val threshold = max(2.0 * accuracy, JUMP_THRESHOLD_FLOOR_M)
         if (abs(deviation) <= threshold) {
             pendingOutliers.clear()
             append(reading)
