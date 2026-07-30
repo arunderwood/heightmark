@@ -5,8 +5,6 @@ import android.hardware.SensorManager
 import android.location.LocationManager
 import com.bizzarosn.heightmark.AltitudeResolver
 import com.bizzarosn.heightmark.ElevationService
-import com.bizzarosn.heightmark.IdleWakeMonitor
-import com.bizzarosn.heightmark.PreferencesRepository
 import com.bizzarosn.heightmark.PressureDeltaDetector
 import com.bizzarosn.heightmark.StillnessDetector
 import dagger.Module
@@ -16,19 +14,17 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
+/**
+ * Only the bindings Dagger cannot derive on its own live here: framework
+ * classes reached through `getSystemService`, and constructors whose
+ * parameters are tuning values with Kotlin defaults that Dagger would
+ * otherwise try to inject. Everything else carries an `@Inject constructor`.
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
     private const val ELEVATION_WINDOW_SIZE = 10
-
-    @Provides
-    @Singleton
-    fun providePreferencesRepository(
-        @ApplicationContext context: Context
-    ): PreferencesRepository {
-        return PreferencesRepository(context)
-    }
 
     @Provides
     fun provideElevationService(): ElevationService {
@@ -67,14 +63,5 @@ object AppModule {
     @Provides
     fun providePressureDeltaDetector(): PressureDeltaDetector {
         return PressureDeltaDetector()
-    }
-
-    @Provides
-    fun provideIdleWakeMonitor(
-        locationManager: LocationManager,
-        sensorManager: SensorManager,
-        pressureDetector: PressureDeltaDetector
-    ): IdleWakeMonitor {
-        return IdleWakeMonitor(locationManager, sensorManager, pressureDetector)
     }
 }
