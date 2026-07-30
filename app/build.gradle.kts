@@ -4,6 +4,16 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Release signing material, present only in CI. Absent locally, which leaves
+// the signing config empty and assembleRelease/bundleRelease output unsigned.
+val keystoreFile: String? = System.getenv("KEYSTORE_FILE")
+val keystorePassword: String? = System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias: String? = System.getenv("KEY_ALIAS")
+val releaseKeyPassword: String? = System.getenv("KEY_PASSWORD")
+val hasSigningEnv = listOf(
+    keystoreFile, keystorePassword, releaseKeyAlias, releaseKeyPassword
+).all { it != null }
+
 android {
     namespace = "com.bizzarosn.heightmark"
     compileSdk = 37
@@ -23,22 +33,22 @@ android {
 
     signingConfigs {
         create("release") {
-            // Only configure signing if environment variables are available (CI/CD)
-            val keystoreFile = System.getenv("KEYSTORE_FILE")
-            val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            val keyAlias = System.getenv("KEY_ALIAS")
-            val keyPassword = System.getenv("KEY_PASSWORD")
-            
-            if (keystoreFile != null && keystorePassword != null && keyAlias != null && keyPassword != null) {
-                storeFile = file(keystoreFile)
+            if (hasSigningEnv) {
+                storeFile = file(keystoreFile!!)
                 storePassword = keystorePassword
-                this.keyAlias = keyAlias
-                this.keyPassword = keyPassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
             }
         }
     }
 
     buildTypes {
+        // Generate debug symbols for native code
+        all {
+            ndk {
+                debugSymbolLevel = "FULL"
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -46,16 +56,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Generate debug symbols for native code
-            ndk {
-                debugSymbolLevel = "FULL"
-            }
-            // Only use signing config if all environment variables are available
-            val hasSigningConfig = System.getenv("KEYSTORE_FILE") != null && 
-                                 System.getenv("KEYSTORE_PASSWORD") != null && 
-                                 System.getenv("KEY_ALIAS") != null && 
-                                 System.getenv("KEY_PASSWORD") != null
-            if (hasSigningConfig) {
+            if (hasSigningEnv) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
@@ -64,9 +65,6 @@ android {
             isDebuggable = true
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            ndk {
-                debugSymbolLevel = "FULL"
-            }
         }
     }
     compileOptions {
@@ -107,11 +105,10 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     testImplementation(libs.junit)
-    
+
     // Mocking for unit tests
     testImplementation(libs.mockk)
-    testImplementation(libs.coroutines.test)
-    
+
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.espresso.accessibility)

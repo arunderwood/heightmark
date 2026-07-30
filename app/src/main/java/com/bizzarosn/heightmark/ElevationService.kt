@@ -112,6 +112,7 @@ class ElevationService(private val readingsCount: Int) {
     }
 
     companion object {
+        const val DEFAULT_WINDOW_SIZE = 10
         const val DEFAULT_VERTICAL_ACCURACY_M = 10f
         const val JUMP_CONFIRM_COUNT = 3
         const val JUMP_THRESHOLD_FLOOR_M = 8.0
