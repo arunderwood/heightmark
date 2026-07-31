@@ -9,7 +9,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
@@ -71,6 +74,23 @@ class ElevationFragment : Fragment() {
         detailsToggle = view.findViewById(R.id.details_toggle)
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
+
+        // With the BottomNavigationView gone, nothing else consumes the
+        // navigation-bar inset; the scrim column now absorbs it itself so the
+        // details toggle doesn't end up under the gesture bar.
+        val contentContainer = view.findViewById<View>(R.id.content_container)
+        val initialPaddingLeft = contentContainer.paddingLeft
+        val initialPaddingRight = contentContainer.paddingRight
+        val initialPaddingBottom = contentContainer.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(contentContainer) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(
+                left = initialPaddingLeft + systemBars.left,
+                right = initialPaddingRight + systemBars.right,
+                bottom = initialPaddingBottom + systemBars.bottom
+            )
+            insets
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
