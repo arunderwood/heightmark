@@ -2,6 +2,7 @@ package com.bizzarosn.heightmark
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -14,16 +15,28 @@ class ElevationUiStateTest {
 
     private fun derive(
         blocked: ElevationUiState.Blocked? = null,
+        locationPromptAnswered: Boolean = false,
         searchTimedOut: Boolean = false,
         elevationMeters: Double? = null,
         readingState: ReadingState = ReadingState.Stable,
         details: ElevationUiState.DetailsFacts? = null
     ) = ElevationUiState.derive(
         blocked = blocked,
+        locationPromptAnswered = locationPromptAnswered,
         searchTimedOut = searchTimedOut,
         elevationMeters = elevationMeters,
         readingState = readingState,
         details = details
+    )
+
+    private fun facts(nowElapsedRealtimeNanos: Long = 0L) = ElevationUiState.DetailsFacts(
+        isIdle = false,
+        location = null,
+        nowElapsedRealtimeNanos = nowElapsedRealtimeNanos,
+        satellitesUsed = 3,
+        satellitesVisible = 9,
+        pressureHpa = null,
+        readingCount = 4
     )
 
     @Test
@@ -97,18 +110,45 @@ class ElevationUiStateTest {
     }
 
     @Test
+    fun `an answered prompt stops being asked while the block stands`() {
+        val state = derive(
+            blocked = ElevationUiState.Blocked.LocationServicesOff,
+            locationPromptAnswered = true
+        )
+        assertFalse(state.promptLocationSettings)
+        // Only the ask goes away; the screen still says why tracking stopped
+        assertEquals(
+            ElevationUiState.Hero.Status(R.string.location_services_off),
+            state.hero
+        )
+    }
+
+    @Test
+    fun `the panel ticker cannot revive an answered prompt`() {
+        // The panel restamps its clock every second, so consecutive states are
+        // never equal and a host sees every one of them. That is what used to
+        // put a dismissed dialog straight back up, so the silence has to hold
+        // across distinct emissions rather than rely on deduplication.
+        val first = derive(
+            blocked = ElevationUiState.Blocked.LocationServicesOff,
+            locationPromptAnswered = true,
+            details = facts(nowElapsedRealtimeNanos = 1_000_000_000L)
+        )
+        val second = derive(
+            blocked = ElevationUiState.Blocked.LocationServicesOff,
+            locationPromptAnswered = true,
+            details = facts(nowElapsedRealtimeNanos = 2_000_000_000L)
+        )
+        assertNotEquals(first, second)
+        assertFalse(first.promptLocationSettings)
+        assertFalse(second.promptLocationSettings)
+    }
+
+    @Test
     fun `the diagnostic panel keeps its rows while blocked`() {
         // The panel is how a user sees why tracking stopped, so a block must
         // not blank it out
-        val facts = ElevationUiState.DetailsFacts(
-            isIdle = false,
-            location = null,
-            nowElapsedRealtimeNanos = 0L,
-            satellitesUsed = 3,
-            satellitesVisible = 9,
-            pressureHpa = null,
-            readingCount = 4
-        )
+        val facts = facts()
         assertEquals(
             facts,
             derive(

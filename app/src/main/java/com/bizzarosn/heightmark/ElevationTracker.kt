@@ -60,6 +60,7 @@ class ElevationTracker @Inject constructor(
     private val _uiState = MutableStateFlow(
         ElevationUiState.derive(
             blocked = null,
+            locationPromptAnswered = false,
             searchTimedOut = false,
             elevationMeters = null,
             readingState = ReadingState.Acquiring,
@@ -78,6 +79,7 @@ class ElevationTracker @Inject constructor(
     private var searchTimeoutJob: Job? = null
 
     private var blocked: ElevationUiState.Blocked? = null
+    private var locationPromptAnswered = false
     private var searchTimedOut = false
     private var detailsVisible = false
     private var foreground = false
@@ -107,6 +109,16 @@ class ElevationTracker @Inject constructor(
             is LocationPermissionState.RequiresRationale ->
                 block(ElevationUiState.Blocked.PermissionRequired)
         }
+    }
+
+    /**
+     * The user answered the location-services prompt, either way. The screen
+     * keeps saying that tracking is off, but it stops asking until the block
+     * clears and a later one raises the question again.
+     */
+    fun onLocationPromptAnswered() {
+        locationPromptAnswered = true
+        publish()
     }
 
     /** The host became visible: everything that costs power starts here. */
@@ -186,7 +198,7 @@ class ElevationTracker @Inject constructor(
             return
         }
 
-        blocked = null
+        updateBlocked(null)
         startSearchTimeout()
         publish()
     }
@@ -260,9 +272,22 @@ class ElevationTracker @Inject constructor(
 
     /** Records why tracking cannot run and tears down whatever was running. */
     private fun block(reason: ElevationUiState.Blocked) {
-        blocked = reason
+        updateBlocked(reason)
         stopLocationUpdates()
         publish()
+    }
+
+    /**
+     * The only writer of [blocked], because answering the settings prompt only
+     * silences the block that raised it. Anything else — tracking resumed, a
+     * different block — is a new situation, so the prompt is armed again; GPS
+     * still being off is not, and re-blocking for that reason keeps it silent.
+     */
+    private fun updateBlocked(reason: ElevationUiState.Blocked?) {
+        if (reason != ElevationUiState.Blocked.LocationServicesOff) {
+            locationPromptAnswered = false
+        }
+        blocked = reason
     }
 
     private fun isGpsAvailable(): Boolean {
@@ -292,6 +317,7 @@ class ElevationTracker @Inject constructor(
     private fun publish() {
         _uiState.value = ElevationUiState.derive(
             blocked = blocked,
+            locationPromptAnswered = locationPromptAnswered,
             searchTimedOut = searchTimedOut,
             elevationMeters = session.displayedElevationMeters,
             readingState = session.readingState(),
