@@ -51,6 +51,8 @@ data class ElevationUiState(
      */
     data class DetailsFacts(
         val isIdle: Boolean,
+        /** The fix-age watchdog has gone off; see [ElevationSession.signalStale]. */
+        val signalStale: Boolean,
         val location: Location?,
         val nowElapsedRealtimeNanos: Long,
         val satellitesUsed: Int,

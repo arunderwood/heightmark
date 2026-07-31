@@ -19,6 +19,7 @@ object DetailsPanelPresenter {
 
     data class Input(
         val isIdle: Boolean,
+        val signalStale: Boolean,
         val location: Location?,
         val nowElapsedRealtimeNanos: Long,
         val satellitesUsed: Int,
@@ -38,7 +39,11 @@ object DetailsPanelPresenter {
     fun rows(input: Input): List<Row> {
         val rows = mutableListOf<Row>()
         rows += Row(
-            if (input.isIdle) R.string.detail_state_idle else R.string.detail_state_tracking
+            when {
+                input.isIdle -> R.string.detail_state_idle
+                input.signalStale -> R.string.detail_state_no_signal
+                else -> R.string.detail_state_tracking
+            }
         )
 
         val location = input.location

@@ -30,9 +30,9 @@ import javax.inject.Inject
 /**
  * The tracking session's Android shell: the GNSS listener registration, the
  * stationary duty cycle, the geoid conversion, the search timeout, the
- * location-provider broadcast, and the panel-only feeds. It drives the pure
- * policy in [ElevationSession] and publishes a single [ElevationUiState] for
- * hosts to render.
+ * fix-age watchdog, the location-provider broadcast, and the panel-only
+ * feeds. It drives the pure policy in [ElevationSession] and publishes a
+ * single [ElevationUiState] for hosts to render.
  *
  * A [ViewModel] because the session outlives the view: a rotation no longer
  * restarts the averaging window or re-acquires a fix. The host still owns when
@@ -76,6 +76,7 @@ class ElevationTracker @Inject constructor(
 
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
+    private var fixWatchdogJob: Job? = null
 
     private var blocked: ElevationUiState.Blocked? = null
     private var searchTimedOut = false
@@ -188,6 +189,7 @@ class ElevationTracker @Inject constructor(
 
         blocked = null
         startSearchTimeout()
+        resetFixWatchdog()
         publish()
     }
 
@@ -201,6 +203,23 @@ class ElevationTracker @Inject constructor(
                 searchTimedOut = true
                 publish()
             }
+        }
+    }
+
+    /**
+     * Fixes normally arrive at 1 Hz ([UPDATE_INTERVAL_MS]); a silent
+     * [FIX_WATCHDOG_TIMEOUT_MS] gap is far more than momentary tree or
+     * bridge cover accounts for and means the radio has lost its view of the
+     * sky (walked into a building, a parking garage). Restarted on every
+     * committed fix so the countdown always measures time since the last one
+     * actually trusted.
+     */
+    private fun resetFixWatchdog() {
+        fixWatchdogJob?.cancel()
+        fixWatchdogJob = viewModelScope.launch {
+            delay(FIX_WATCHDOG_TIMEOUT_MS)
+            session.onFixWatchdogExpired()
+            publish()
         }
     }
 
@@ -218,6 +237,7 @@ class ElevationTracker @Inject constructor(
             // The window was flushed while this fix was converting: drop it
             if (!session.commit(pending, elevation)) return@launch
             lastLocation = location
+            resetFixWatchdog()
             publish()
         }
     }
@@ -253,6 +273,8 @@ class ElevationTracker @Inject constructor(
         idleWakeMonitor.stop()
         searchTimeoutJob?.cancel()
         searchTimeoutJob = null
+        fixWatchdogJob?.cancel()
+        fixWatchdogJob = null
         locationListener?.let { listener ->
             locationManager.removeUpdates(listener)
         }
@@ -303,6 +325,7 @@ class ElevationTracker @Inject constructor(
         if (!detailsVisible) return null
         return ElevationUiState.DetailsFacts(
             isIdle = session.isIdle,
+            signalStale = session.signalStale,
             location = lastLocation,
             nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
             satellitesUsed = detailsSources.satellitesUsed,
@@ -323,5 +346,6 @@ class ElevationTracker @Inject constructor(
         private const val TAG = "ElevationTracker"
         private const val SEARCH_TIMEOUT_MS = 30_000L
         private const val UPDATE_INTERVAL_MS = 1_000L
+        private const val FIX_WATCHDOG_TIMEOUT_MS = 20_000L
     }
 }

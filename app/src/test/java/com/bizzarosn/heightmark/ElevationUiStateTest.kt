@@ -102,6 +102,7 @@ class ElevationUiStateTest {
         // not blank it out
         val facts = ElevationUiState.DetailsFacts(
             isIdle = false,
+            signalStale = false,
             location = null,
             nowElapsedRealtimeNanos = 0L,
             satellitesUsed = 3,

@@ -191,6 +191,39 @@ class ElevationSessionTest {
         assertEquals(1, session.readingCount)
     }
 
+    // ---- Fix-age watchdog ----
+
+    @Test
+    fun `a watchdog expiry with no prior fix does nothing`() {
+        session.onFixWatchdogExpired()
+
+        assertFalse(session.signalStale)
+        assertEquals(ReadingState.Acquiring, session.readingState())
+    }
+
+    @Test
+    fun `a watchdog expiry makes a settled reading dormant without discarding the window`() {
+        repeat(WINDOW_SIZE) { addReading(100.0) }
+        session.onFixWatchdogExpired()
+
+        assertTrue(session.signalStale)
+        assertFalse(session.isIdle)
+        assertEquals(ReadingState.Dormant, session.readingState())
+        // Unlike a flush, the averaging window survives a signal-loss expiry
+        assertEquals(WINDOW_SIZE, session.readingCount)
+        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+    }
+
+    @Test
+    fun `the next fix after a watchdog expiry clears the stale state`() {
+        repeat(WINDOW_SIZE) { addReading(100.0) }
+        session.onFixWatchdogExpired()
+        addReading(100.0)
+
+        assertFalse(session.signalStale)
+        assertEquals(ReadingState.Stable, session.readingState())
+    }
+
     private companion object {
         const val WINDOW_SIZE = 3
     }

@@ -197,6 +197,7 @@ class ElevationFragment : Fragment() {
         val rows = DetailsPanelPresenter.rows(
             DetailsPanelPresenter.Input(
                 isIdle = facts.isIdle,
+                signalStale = facts.signalStale,
                 location = facts.location,
                 nowElapsedRealtimeNanos = facts.nowElapsedRealtimeNanos,
                 satellitesUsed = facts.satellitesUsed,

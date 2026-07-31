@@ -15,7 +15,10 @@ sealed interface ReadingState {
     /** Window full and tight: the displayed value can be trusted. */
     data object Stable : ReadingState
 
-    /** GPS is off (stationary duty-cycle) or the reading predates a gap. */
+    /**
+     * GPS is off (stationary duty-cycle), the reading predates a gap, or no
+     * fix has committed recently enough to trust what's on screen.
+     */
     data object Dormant : ReadingState
 
     companion object {
@@ -23,10 +26,11 @@ sealed interface ReadingState {
             hasFixEver: Boolean,
             isIdle: Boolean,
             awaitingFreshFix: Boolean,
+            signalStale: Boolean,
             snapshot: ElevationService.Snapshot
         ): ReadingState = when {
             !hasFixEver -> Acquiring
-            isIdle || awaitingFreshFix -> Dormant
+            isIdle || awaitingFreshFix || signalStale -> Dormant
             snapshot.settled -> Stable
             else -> Converging(snapshot.progress)
         }
