@@ -37,12 +37,16 @@ sealed class LocationPermissionState {
 
 class LocationPermissionHandler(
     private val fragment: Fragment,
-    private val onPermissionStateChanged: (LocationPermissionState) -> Unit
+    private val onPermissionStateChanged: (LocationPermissionState) -> Unit,
+    /** Whether the upgrade dialog already interrupted this session — the
+     *  caller backs this with session-scoped state, since this handler is
+     *  rebuilt on every fragment recreation and cannot hold it itself. */
+    private val hasShownUpgradeDialog: () -> Boolean,
+    private val onUpgradeDialogShown: () -> Unit
 ) : DefaultLifecycleObserver {
-    
+
     private var locationPermissionLauncher: ActivityResultLauncher<Array<String>>? = null
     private var currentDialog: AlertDialog? = null
-    private var upgradeDialogShown = false
 
     private val permissions = arrayOf(
         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -93,7 +97,9 @@ class LocationPermissionHandler(
         }
     }
     
-    private fun requestPermissions() {
+    /** Launches the system permission request. Also the blocked screen's
+     *  persistent-action entry point for [ElevationUiState.BlockedAction.RequestPermission]. */
+    fun requestPermissions() {
         locationPermissionLauncher?.launch(permissions)
     }
     
@@ -126,10 +132,11 @@ class LocationPermissionHandler(
 
     private fun showPreciseUpgradeDialog() {
         // Ask once per session; re-requesting in a loop would just re-show the
-        // system dialog every time the fragment resumes
-        if (upgradeDialogShown) return
+        // system dialog every time the fragment resumes. The blocked screen's
+        // persistent action button is the fallback once this has fired.
+        if (hasShownUpgradeDialog()) return
         if (currentDialog?.isShowing == true) return
-        upgradeDialogShown = true
+        onUpgradeDialogShown()
 
         showDialog(
             titleRes = R.string.precise_location_required,
@@ -149,8 +156,8 @@ class LocationPermissionHandler(
             messageRes = R.string.location_permission_rationale_message,
             positiveRes = R.string.grant_permission,
             onPositive = ::requestPermissions,
-            negativeRes = R.string.exit_app,
-            onNegative = { fragment.requireActivity().finish() }
+            negativeRes = R.string.not_now,
+            onNegative = {}
         )
     }
 
@@ -162,12 +169,18 @@ class LocationPermissionHandler(
             messageRes = R.string.permission_permanently_denied_message,
             positiveRes = R.string.open_settings,
             onPositive = ::openAppSettings,
-            negativeRes = R.string.exit_app,
-            onNegative = { fragment.requireActivity().finish() }
+            negativeRes = R.string.not_now,
+            onNegative = {}
         )
     }
 
-    /** Builds and shows the single tracked dialog; callers gate on [currentDialog]. */
+    /**
+     * Builds and shows the single tracked dialog; callers gate on
+     * [currentDialog]. Dismissible rather than forced — refusing (back,
+     * outside tap, or the negative button) lands the user back on the
+     * blocked screen, which now explains the block and offers the same
+     * recovery action as a persistent button.
+     */
     private fun showDialog(
         @StringRes titleRes: Int,
         @StringRes messageRes: Int,
@@ -181,13 +194,15 @@ class LocationPermissionHandler(
             .setMessage(fragment.getString(messageRes))
             .setPositiveButton(fragment.getString(positiveRes)) { _, _ -> onPositive() }
             .setNegativeButton(fragment.getString(negativeRes)) { _, _ -> onNegative() }
-            .setCancelable(false)
+            .setCancelable(true)
             .create()
 
         currentDialog?.show()
     }
 
-    private fun openAppSettings() {
+    /** Also the blocked screen's persistent-action entry point for
+     *  [ElevationUiState.BlockedAction.OpenAppSettings]. */
+    fun openAppSettings() {
         val intent = Intent(
             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
             Uri.fromParts("package", fragment.requireActivity().packageName, null)

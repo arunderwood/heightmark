@@ -15,6 +15,7 @@ class DetailsPanelPresenterTest {
 
     private fun input(
         isIdle: Boolean = false,
+        isBlocked: Boolean = false,
         location: android.location.Location? = null,
         nowNanos: Long = 0L,
         satellitesUsed: Int = 0,
@@ -25,6 +26,7 @@ class DetailsPanelPresenterTest {
         useMetric: Boolean = true
     ) = Input(
         isIdle = isIdle,
+        isBlocked = isBlocked,
         location = location,
         nowElapsedRealtimeNanos = nowNanos,
         satellitesUsed = satellitesUsed,
@@ -216,6 +218,15 @@ class DetailsPanelPresenterTest {
         val rows = DetailsPanelPresenter.rows(input(isIdle = true))
 
         assertEquals(Row(R.string.detail_state_idle), rows.first())
+    }
+
+    @Test
+    fun `a block outranks idle for the leading row`() {
+        // The duty cycle's own idle flag doesn't get cleared just because
+        // tracking stopped for a different reason, so a block must win
+        val rows = DetailsPanelPresenter.rows(input(isIdle = true, isBlocked = true))
+
+        assertEquals(Row(R.string.detail_state_blocked), rows.first())
     }
 
     @Test

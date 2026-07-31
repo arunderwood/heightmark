@@ -86,6 +86,15 @@ class ElevationTracker @Inject constructor(
     private var receiverRegistered = false
     private var lastLocation: Location? = null
 
+    /**
+     * Whether the coarse-only precise-upgrade dialog has already interrupted
+     * this session. Lives here rather than on [LocationPermissionHandler]
+     * because that handler is rebuilt on every fragment recreation
+     * (rotation, dark-mode switch); this ViewModel survives those and dies
+     * only with the session, matching the "once per session" intent.
+     */
+    var upgradeDialogShown = false
+
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != LocationManager.PROVIDERS_CHANGED_ACTION) return
@@ -105,9 +114,10 @@ class ElevationTracker @Inject constructor(
             }
             is LocationPermissionState.CoarseOnly ->
                 block(ElevationUiState.Blocked.PreciseLocationRequired)
-            is LocationPermissionState.PermanentlyDenied,
             is LocationPermissionState.RequiresRationale ->
                 block(ElevationUiState.Blocked.PermissionRequired)
+            is LocationPermissionState.PermanentlyDenied ->
+                block(ElevationUiState.Blocked.PermissionPermanentlyDenied)
         }
     }
 
@@ -334,6 +344,7 @@ class ElevationTracker @Inject constructor(
         if (!detailsVisible) return null
         return ElevationUiState.DetailsFacts(
             isIdle = session.isIdle,
+            isBlocked = blocked != null,
             location = lastLocation,
             nowElapsedRealtimeNanos = SystemClock.elapsedRealtimeNanos(),
             satellitesUsed = detailsSources.satellitesUsed,

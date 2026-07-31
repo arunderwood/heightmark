@@ -18,6 +18,7 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,7 @@ class ElevationFragment : Fragment() {
     private lateinit var elevationLabel: TextView
     private lateinit var elevationTextView: TextView
     private lateinit var stabilityLine: StabilityLineView
+    private lateinit var blockedActionButton: MaterialButton
     private lateinit var detailsToggle: TextView
     private lateinit var detailsPanel: ViewGroup
 
@@ -57,9 +59,12 @@ class ElevationFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        permissionHandler = LocationPermissionHandler(this) { state ->
-            tracker.onPermissionState(state)
-        }
+        permissionHandler = LocationPermissionHandler(
+            fragment = this,
+            onPermissionStateChanged = { state -> tracker.onPermissionState(state) },
+            hasShownUpgradeDialog = { tracker.upgradeDialogShown },
+            onUpgradeDialogShown = { tracker.upgradeDialogShown = true }
+        )
         permissionHandler.initialize()
     }
 
@@ -73,6 +78,7 @@ class ElevationFragment : Fragment() {
         elevationLabel = view.findViewById(R.id.elevation_label)
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         stabilityLine = view.findViewById(R.id.stability_line)
+        blockedActionButton = view.findViewById(R.id.blocked_action_button)
         detailsToggle = view.findViewById(R.id.details_toggle)
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
@@ -154,6 +160,7 @@ class ElevationFragment : Fragment() {
         renderStabilityLine(state.readingState)
         renderDetails(state.details)
         renderLocationOffPrompt(state.promptLocationSettings)
+        renderBlockedAction(state.blockedAction)
     }
 
     /**
@@ -237,6 +244,7 @@ class ElevationFragment : Fragment() {
         val rows = DetailsPanelPresenter.rows(
             DetailsPanelPresenter.Input(
                 isIdle = facts.isIdle,
+                isBlocked = facts.isBlocked,
                 location = facts.location,
                 nowElapsedRealtimeNanos = facts.nowElapsedRealtimeNanos,
                 satellitesUsed = facts.satellitesUsed,
@@ -301,6 +309,31 @@ class ElevationFragment : Fragment() {
     private fun dismissLocationOffDialog() {
         locationOffDialog?.dismiss()
         locationOffDialog = null
+    }
+
+    /**
+     * The blocked screen's persistent recovery path: unlike the dialogs,
+     * which are dismissible and shown at most once per interruption, this
+     * button stays available for the rest of the session so dismissing a
+     * dialog never strands the user without a way to retry.
+     */
+    private fun renderBlockedAction(action: ElevationUiState.BlockedAction?) {
+        if (action == null) {
+            blockedActionButton.isVisible = false
+            return
+        }
+        blockedActionButton.isVisible = true
+        blockedActionButton.setText(action.labelRes)
+        blockedActionButton.setOnClickListener { performBlockedAction(action) }
+    }
+
+    private fun performBlockedAction(action: ElevationUiState.BlockedAction) {
+        when (action) {
+            ElevationUiState.BlockedAction.RequestPermission -> permissionHandler.requestPermissions()
+            ElevationUiState.BlockedAction.OpenAppSettings -> permissionHandler.openAppSettings()
+            ElevationUiState.BlockedAction.OpenLocationSettings ->
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+        }
     }
 
     private fun applyTextAppearance(textAppearanceAttr: Int) {
