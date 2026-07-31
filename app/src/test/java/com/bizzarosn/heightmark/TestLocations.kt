@@ -55,6 +55,30 @@ object TestLocations {
         return location
     }
 
+    /**
+     * A fix for [IdleWakePolicy] tests. [driftMeters] only matters when this
+     * fix plays the anchor role: distanceTo is only ever called with the
+     * anchor as receiver, so model the anchor's drift parameter as its
+     * distance to everything, same convention as [movingFix].
+     */
+    fun idleWakeFix(
+        driftMeters: Float = 0f,
+        horizontalAccuracy: Float? = null,
+        hasAltitude: Boolean = true,
+        altitude: Double = 100.0,
+        verticalAccuracy: Float? = null
+    ): Location {
+        val location = mockk<Location>()
+        every { location.distanceTo(any()) } returns driftMeters
+        every { location.hasAccuracy() } returns (horizontalAccuracy != null)
+        horizontalAccuracy?.let { every { location.accuracy } returns it }
+        every { location.hasAltitude() } returns hasAltitude
+        every { location.altitude } returns altitude
+        every { location.hasVerticalAccuracy() } returns (verticalAccuracy != null)
+        verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
+        return location
+    }
+
     /** A fix carrying altitude data for geoid-conversion tests. */
     fun altitudeFix(ellipsoid: Double, msl: Double? = null): Location {
         val location = mockk<Location>()
