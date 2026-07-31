@@ -112,16 +112,20 @@
                     android:text="@string/details_show"
                     android:textColor="@color/hm_on_scrim_secondary" />
 
-                <TextView
+                <!--
+                     A wrap_content row set re-measures its width as digit
+                     counts change (e.g. the fix-age row ticking from 9s to
+                     10s), shifting the panel every render; match_parent keeps
+                     the measured width stable. Each row is added as its own
+                     child at runtime.
+                -->
+                <LinearLayout
                     android:id="@+id/details_panel"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:fontFamily="monospace"
-                    android:textAppearance="?attr/textAppearanceBodySmall"
-                    android:textColor="@color/hm_on_scrim_secondary"
+                    android:orientation="vertical"
                     android:visibility="gone"
-                    tools:text="Sea-level elevation: 112.4 m"
                     tools:visibility="visible" />
             </LinearLayout>
         </LinearLayout>

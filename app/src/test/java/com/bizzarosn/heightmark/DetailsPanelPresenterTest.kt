@@ -86,7 +86,8 @@ class DetailsPanelPresenterTest {
                 Row(R.string.detail_geoid_offset, listOf(meters("37.6"))),
                 Row(R.string.detail_accuracy, listOf(meters("3.0"), meters("5.0"))),
                 Row(R.string.detail_position, listOf("47.61000", "-122.33000")),
-                Row(R.string.detail_fix_age, listOf(12L)),
+                // Fix age coarsens above 10s; see the dedicated tests below
+                Row(R.string.detail_fix_age, listOf(10L)),
                 Row(R.string.detail_satellites, listOf(7, 11)),
                 Row(R.string.detail_pressure, listOf("1013.2")),
                 Row(R.string.detail_readings, listOf(10))
@@ -199,5 +200,37 @@ class DetailsPanelPresenterTest {
             .first { it.templateRes == R.string.detail_fix_age }
 
         assertEquals(listOf(1L), age.args)
+    }
+
+    @Test
+    fun `fix age below ten seconds reports the exact second`() {
+        val location = TestLocations.detailsFix(atNanos = 0L)
+
+        val age = DetailsPanelPresenter.rows(input(location = location, nowNanos = 9_000_000_000L))
+            .first { it.templateRes == R.string.detail_fix_age }
+
+        assertEquals(listOf(9L), age.args)
+    }
+
+    /**
+     * A 1 Hz ticker keeps this row's fix age moving; snapping to ten-second
+     * steps past the threshold means the row's text — and the accessibility
+     * node built from it — settles for nine seconds out of every ten instead
+     * of rewriting on every tick.
+     */
+    @Test
+    fun `fix age at or beyond ten seconds snaps to ten-second steps`() {
+        val location = TestLocations.detailsFix(atNanos = 0L)
+
+        fun ageAt(nowNanos: Long) =
+            DetailsPanelPresenter.rows(input(location = location, nowNanos = nowNanos))
+                .first { it.templateRes == R.string.detail_fix_age }
+                .args
+                .single()
+
+        assertEquals(10L, ageAt(10_000_000_000L))
+        assertEquals(10L, ageAt(15_000_000_000L))
+        assertEquals(10L, ageAt(19_000_000_000L))
+        assertEquals(20L, ageAt(20_000_000_000L))
     }
 }
