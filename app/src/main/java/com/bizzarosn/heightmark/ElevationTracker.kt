@@ -61,7 +61,7 @@ class ElevationTracker @Inject constructor(
         ElevationUiState.derive(
             blocked = null,
             searchTimedOut = false,
-            elevationMeters = null,
+            elevation = null,
             readingState = ReadingState.Acquiring,
             details = null
         )
@@ -213,9 +213,10 @@ class ElevationTracker @Inject constructor(
         viewModelScope.launch {
             // Geoid data loads from disk on first use in a region
             val elevation = withContext(Dispatchers.IO) {
-                altitudeResolver.mslAltitudeMeters(location)
+                altitudeResolver.resolve(location)
             }
-            // The window was flushed while this fix was converting: drop it
+            // The window was flushed while this fix was converting, or the fix
+            // came back on the wrong datum to join it: either way, drop it
             if (!session.commit(pending, elevation)) return@launch
             lastLocation = location
             publish()
@@ -293,7 +294,7 @@ class ElevationTracker @Inject constructor(
         _uiState.value = ElevationUiState.derive(
             blocked = blocked,
             searchTimedOut = searchTimedOut,
-            elevationMeters = session.displayedElevationMeters,
+            elevation = session.displayedElevation,
             readingState = session.readingState(),
             details = detailsFacts()
         )
@@ -308,7 +309,8 @@ class ElevationTracker @Inject constructor(
             satellitesUsed = detailsSources.satellitesUsed,
             satellitesVisible = detailsSources.satellitesVisible,
             pressureHpa = detailsSources.pressureHpa,
-            readingCount = session.readingCount
+            readingCount = session.readingCount,
+            datum = session.displayedElevation?.datum
         )
     }
 

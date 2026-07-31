@@ -25,6 +25,7 @@ object DetailsPanelPresenter {
         val satellitesVisible: Int,
         val pressureHpa: Float?,
         val readingCount: Int,
+        val datum: ElevationDatum?,
         val useMetric: Boolean,
         val locale: Locale
     )
@@ -93,9 +94,18 @@ object DetailsPanelPresenter {
                 listOf(pressure.toDouble().fmt(input.locale, PRESSURE_DECIMALS))
             )
         }
+        // Both rows describe the average rather than the latest fix, so they
+        // sit together at the foot of the panel
+        input.datum?.let { rows += Row(it.rowRes()) }
         rows += Row(R.string.detail_readings, listOf(input.readingCount))
 
         return rows
+    }
+
+    @StringRes
+    private fun ElevationDatum.rowRes(): Int = when (this) {
+        ElevationDatum.MEAN_SEA_LEVEL -> R.string.detail_datum_msl
+        ElevationDatum.ELLIPSOID -> R.string.detail_datum_ellipsoid
     }
 
     private fun Input.length(meters: Double): LengthFormatter.Detail =

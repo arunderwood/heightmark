@@ -39,6 +39,7 @@ class ElevationFragment : Fragment() {
 
     private val tracker: ElevationTracker by viewModels()
 
+    private lateinit var elevationLabel: TextView
     private lateinit var elevationTextView: TextView
     private lateinit var stabilityLine: StabilityLineView
     private lateinit var detailsToggle: TextView
@@ -66,6 +67,7 @@ class ElevationFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        elevationLabel = view.findViewById(R.id.elevation_label)
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         stabilityLine = view.findViewById(R.id.stability_line)
         detailsToggle = view.findViewById(R.id.details_toggle)
@@ -135,12 +137,14 @@ class ElevationFragment : Fragment() {
     }
 
     /**
-     * The only writer of the hero TextView. Both modes set the same properties
-     * so switching modes can never leave a stale one behind.
+     * The only writer of the hero TextView and the label naming it. Both modes
+     * set the same properties so switching modes can never leave a stale one
+     * behind.
      */
     private fun renderHero(hero: ElevationUiState.Hero) {
         when (hero) {
             is ElevationUiState.Hero.Status -> {
+                elevationLabel.setText(R.string.current_elevation)
                 // Status messages use headline type; the hero display size is
                 // reserved for the value
                 applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
@@ -153,6 +157,13 @@ class ElevationFragment : Fragment() {
                 elevationTextView.text = getString(hero.messageRes)
             }
             is ElevationUiState.Hero.Value -> {
+                // A height the device could not convert is not sea-level
+                // elevation, and the label over the number says so rather than
+                // letting it pass for one
+                val ellipsoid = hero.datum == ElevationDatum.ELLIPSOID
+                elevationLabel.setText(
+                    if (ellipsoid) R.string.ellipsoid_elevation else R.string.current_elevation
+                )
                 applyTextAppearance(
                     com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized
                 )
@@ -166,7 +177,9 @@ class ElevationFragment : Fragment() {
                     R.string.elevation_text, formatted.value, getString(formatted.unitRes)
                 )
                 elevationTextView.contentDescription = getString(
-                    R.string.elevation_a11y, formatted.value, getString(formatted.spokenUnitRes)
+                    if (ellipsoid) R.string.elevation_a11y_ellipsoid else R.string.elevation_a11y,
+                    formatted.value,
+                    getString(formatted.spokenUnitRes)
                 )
             }
         }
@@ -203,6 +216,7 @@ class ElevationFragment : Fragment() {
                 satellitesVisible = facts.satellitesVisible,
                 pressureHpa = facts.pressureHpa,
                 readingCount = facts.readingCount,
+                datum = facts.datum,
                 useMetric = useMetricUnit,
                 locale = Locale.getDefault()
             )
