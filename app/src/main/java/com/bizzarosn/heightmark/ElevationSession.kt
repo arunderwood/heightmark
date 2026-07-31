@@ -108,10 +108,12 @@ class ElevationSession @Inject constructor(
     /**
      * The fix-age watchdog expired: tracking is active but no fix has
      * committed recently enough to trust the displayed reading. A no-op
-     * before the first fix, where [ReadingState.Acquiring] already covers it.
+     * before the first fix, where [ReadingState.Acquiring] already covers it,
+     * and while idle, where the radio is off on purpose and a fix drought is
+     * the expected condition rather than a lost signal.
      */
     fun onFixWatchdogExpired() {
-        if (hasFix) signalStale = true
+        if (hasFix && !isIdle) signalStale = true
     }
 
     /** A wake fired: the device moved, so the window is stale. */

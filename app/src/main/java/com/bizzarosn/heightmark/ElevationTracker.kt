@@ -237,7 +237,11 @@ class ElevationTracker @Inject constructor(
             // The window was flushed while this fix was converting: drop it
             if (!session.commit(pending, elevation)) return@launch
             lastLocation = location
-            resetFixWatchdog()
+            // The fix that tips the stillness detector into goIdle still
+            // commits, and its radio is already off: arming a countdown
+            // against a silence that is now deliberate would flag "no signal"
+            // at the next wake
+            if (!session.isIdle) resetFixWatchdog()
             publish()
         }
     }

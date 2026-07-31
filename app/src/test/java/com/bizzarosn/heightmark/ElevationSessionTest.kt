@@ -215,6 +215,23 @@ class ElevationSessionTest {
     }
 
     @Test
+    fun `a watchdog expiry while idle does not mark the signal stale`() {
+        // The fix that tips the stillness detector commits after enterIdle,
+        // so a countdown it armed can expire mid-duty-cycle — with the radio
+        // off on purpose, that silence is not a lost signal
+        addReading(100.0)
+        session.enterIdle()
+        session.onFixWatchdogExpired()
+
+        assertFalse(session.signalStale)
+        assertEquals(ReadingState.Dormant, session.readingState())
+
+        // The wake's reacquisition must not carry a stale-signal verdict either
+        session.wake()
+        assertFalse(session.signalStale)
+    }
+
+    @Test
     fun `the next fix after a watchdog expiry clears the stale state`() {
         repeat(WINDOW_SIZE) { addReading(100.0) }
         session.onFixWatchdogExpired()
