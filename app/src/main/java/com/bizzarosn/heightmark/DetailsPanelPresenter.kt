@@ -26,6 +26,7 @@ object DetailsPanelPresenter {
         val satellitesVisible: Int,
         val pressureHpa: Float?,
         val readingCount: Int,
+        val datum: ElevationDatum?,
         val useMetric: Boolean,
         val locale: Locale
     )
@@ -68,7 +69,12 @@ object DetailsPanelPresenter {
             rows += Row(
                 R.string.detail_accuracy,
                 listOf(
-                    input.lengthOrUnknown(location.verticalAccuracyOrNull()),
+                    // MSL accuracy bounds the number actually on screen (geoid
+                    // model error included); the raw ellipsoidal figure is a
+                    // fallback for when the platform or a fix doesn't have it.
+                    input.lengthOrUnknown(
+                        location.mslAltitudeAccuracyOrNull() ?: location.verticalAccuracyOrNull()
+                    ),
                     input.lengthOrUnknown(location.horizontalAccuracyOrNull())
                 )
             )
@@ -82,8 +88,10 @@ object DetailsPanelPresenter {
             rows += Row(
                 R.string.detail_fix_age,
                 listOf(
-                    (input.nowElapsedRealtimeNanos - location.elapsedRealtimeNanos) /
-                        NANOS_PER_SECOND
+                    fixAgeSeconds(
+                        (input.nowElapsedRealtimeNanos - location.elapsedRealtimeNanos) /
+                            NANOS_PER_SECOND
+                    )
                 )
             )
         }
@@ -98,9 +106,18 @@ object DetailsPanelPresenter {
                 listOf(pressure.toDouble().fmt(input.locale, PRESSURE_DECIMALS))
             )
         }
+        // Both rows describe the average rather than the latest fix, so they
+        // sit together at the foot of the panel
+        input.datum?.let { rows += Row(it.rowRes()) }
         rows += Row(R.string.detail_readings, listOf(input.readingCount))
 
         return rows
+    }
+
+    @StringRes
+    private fun ElevationDatum.rowRes(): Int = when (this) {
+        ElevationDatum.MEAN_SEA_LEVEL -> R.string.detail_datum_msl
+        ElevationDatum.ELLIPSOID -> R.string.detail_datum_ellipsoid
     }
 
     private fun Input.length(meters: Double): LengthFormatter.Detail =
@@ -112,7 +129,23 @@ object DetailsPanelPresenter {
     private fun Double.fmt(locale: Locale, decimals: Int): String =
         String.format(locale, "%.${decimals}f", this)
 
+    /**
+     * Below [FIX_AGE_COARSEN_THRESHOLD_S] the exact second is reported; beyond
+     * it the value snaps to [FIX_AGE_STEP_S]-second steps. A 1 Hz ticker keeps
+     * this row's fix age moving, so an unthrottled value would rewrite the
+     * row's accessibility node every second, permanently interrupting anyone
+     * reading it with a screen reader.
+     */
+    private fun fixAgeSeconds(exactSeconds: Long): Long =
+        if (exactSeconds < FIX_AGE_COARSEN_THRESHOLD_S) {
+            exactSeconds
+        } else {
+            (exactSeconds / FIX_AGE_STEP_S) * FIX_AGE_STEP_S
+        }
+
     private const val NANOS_PER_SECOND = 1_000_000_000
     private const val POSITION_DECIMALS = 5
     private const val PRESSURE_DECIMALS = 1
+    private const val FIX_AGE_COARSEN_THRESHOLD_S = 10L
+    private const val FIX_AGE_STEP_S = 10L
 }

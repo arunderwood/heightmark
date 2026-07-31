@@ -152,10 +152,7 @@ class IdleWakeMonitor @Inject constructor(
 
     private fun onOpportunisticFix(location: Location) {
         val anchor = anchor ?: return
-        val movedHorizontally = anchor.distanceTo(location) > MAX_IDLE_DRIFT_METERS
-        val movedVertically = anchor.hasAltitude() && location.hasAltitude() &&
-            kotlin.math.abs(anchor.altitude - location.altitude) > MAX_IDLE_ALTITUDE_DRIFT_METERS
-        if (movedHorizontally || movedVertically) {
+        if (IdleWakePolicy.shouldWake(anchor, location)) {
             Log.d(TAG, "Opportunistic fix shows movement")
             wake()
         }
@@ -166,7 +163,5 @@ class IdleWakeMonitor @Inject constructor(
         private const val PRESSURE_SAMPLING_PERIOD_US = 1_000_000 // 1 Hz
         private const val PASSIVE_INTERVAL_MS = 10_000L
         private const val FALLBACK_POLL_INTERVAL_MS = 180_000L // 3 min
-        private const val MAX_IDLE_DRIFT_METERS = 30f
-        private const val MAX_IDLE_ALTITUDE_DRIFT_METERS = 10.0
     }
 }

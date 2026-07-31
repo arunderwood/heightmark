@@ -4,6 +4,9 @@
     <string name="loading_elevation">Fetching elevation…</string>
     <string name="elevation">Elevation</string>
     <string name="current_elevation">Current elevation</string>
+    <!-- Labels the hero number when geoid data is unavailable and the reading is
+         a raw GNSS height, which differs from sea level by tens of meters -->
+    <string name="ellipsoid_elevation">Ellipsoid height · no sea-level data</string>
     <string name="unit_meters">m</string>
     <string name="unit_feet">ft</string>
     <!-- Screen-reader forms: both the hero number's unit and the chip labels
@@ -13,6 +16,9 @@
     <!-- Same format as elevation_text today, but kept separate so spoken
          output can diverge from visual output in translations. -->
     <string name="elevation_a11y">%1$d %2$s</string>
+    <!-- Spoken form of the same reading when it is an ellipsoid height: the
+         visual label is a separate node, so the number has to carry it too -->
+    <string name="elevation_a11y_ellipsoid">%1$d %2$s above the ellipsoid, sea-level data unavailable</string>
     <string name="stability_line_a11y">Reading stability</string>
     <string name="details_state_expanded">Expanded</string>
     <string name="details_state_collapsed">Collapsed</string>
@@ -43,6 +49,8 @@
     <string name="detail_satellites" tools:ignore="PluralsCandidate">Satellites: %1$d used / %2$d visible</string>
     <string name="detail_position">Position: %1$s, %2$s</string>
     <string name="detail_fix_age">Last fix: %1$ds ago</string>
+    <string name="detail_datum_msl">Datum: mean sea level</string>
+    <string name="detail_datum_ellipsoid">Datum: WGS84 ellipsoid (no geoid data)</string>
     <string name="detail_readings">Readings in average: %1$d</string>
     <string name="detail_pressure">Pressure: %1$s hPa</string>
     <string name="detail_state_tracking">GPS: tracking</string>

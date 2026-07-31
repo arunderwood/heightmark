@@ -18,97 +18,116 @@
         app:layout_constraintTop_toTopOf="parent"
         app:srcCompat="@drawable/background" />
 
-    <LinearLayout
-        android:id="@+id/content_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@drawable/bg_bottom_scrim"
-        android:gravity="center_horizontal"
-        android:orientation="vertical"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="@dimen/scrim_fade_height"
-        android:paddingBottom="32dp"
+    <ScrollView
+        android:id="@+id/content_scroll"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:fillViewport="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
-            android:id="@+id/elevation_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/current_elevation"
-            android:textAppearance="?attr/textAppearanceLabelLargeEmphasized"
-            android:textColor="@color/hm_on_scrim_secondary" />
-
-        <TextView
-            android:id="@+id/elevation_text_view"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:maxLines="2"
-            android:text="@string/loading_elevation"
-            android:textAppearance="?attr/textAppearanceHeadlineSmall"
-            android:textColor="@color/hm_on_scrim" />
+            android:layout_height="match_parent"
+            android:gravity="bottom"
+            android:orientation="vertical">
 
-        <com.bizzarosn.heightmark.StabilityLineView
-            android:id="@+id/stability_line"
-            android:layout_width="200dp"
-            android:layout_height="24dp"
-            android:layout_marginTop="2dp"
-            android:accessibilityLiveRegion="polite"
-            android:contentDescription="@string/stability_line_a11y" />
-
-        <com.google.android.material.button.MaterialButtonToggleGroup
-            android:id="@+id/unit_toggle_group"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:theme="@style/ThemeOverlay.HeightMark.OnImage"
-            app:selectionRequired="true"
-            app:singleSelection="true">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_meters"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/content_container"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:contentDescription="@string/unit_meters_spoken"
-                android:minHeight="@dimen/min_touch_target"
-                android:minWidth="@dimen/unit_chip_min_width"
-                android:text="@string/unit_meters" />
+                android:background="@drawable/bg_bottom_scrim"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingHorizontal="24dp"
+                android:paddingTop="@dimen/scrim_fade_height"
+                android:paddingBottom="32dp">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/button_feet"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="@string/unit_feet_spoken"
-                android:minHeight="@dimen/min_touch_target"
-                android:minWidth="@dimen/unit_chip_min_width"
-                android:text="@string/unit_feet" />
-        </com.google.android.material.button.MaterialButtonToggleGroup>
+                <TextView
+                    android:id="@+id/elevation_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/current_elevation"
+                    android:textAppearance="?attr/textAppearanceLabelLargeEmphasized"
+                    android:textColor="@color/hm_on_scrim_secondary" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/details_toggle"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:minHeight="@dimen/min_touch_target"
-            android:minWidth="@dimen/min_touch_target"
-            android:text="@string/details_show"
-            android:textColor="@color/hm_on_scrim_secondary" />
+                <TextView
+                    android:id="@+id/elevation_text_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:maxLines="2"
+                    android:text="@string/loading_elevation"
+                    android:textAppearance="?attr/textAppearanceHeadlineSmall"
+                    android:textColor="@color/hm_on_scrim" />
 
-        <TextView
-            android:id="@+id/details_panel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:fontFamily="monospace"
-            android:textAppearance="?attr/textAppearanceBodySmall"
-            android:textColor="@color/hm_on_scrim_secondary"
-            android:visibility="gone"
-            tools:text="Sea-level elevation: 112.4 m"
-            tools:visibility="visible" />
-    </LinearLayout>
+                <com.bizzarosn.heightmark.StabilityLineView
+                    android:id="@+id/stability_line"
+                    android:layout_width="200dp"
+                    android:layout_height="24dp"
+                    android:layout_marginTop="2dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:contentDescription="@string/stability_line_a11y" />
+
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/unit_toggle_group"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:theme="@style/ThemeOverlay.HeightMark.OnImage"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_meters"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/unit_meters_spoken"
+                        android:minHeight="@dimen/min_touch_target"
+                        android:minWidth="@dimen/unit_chip_min_width"
+                        android:text="@string/unit_meters" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/button_feet"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/unit_feet_spoken"
+                        android:minHeight="@dimen/min_touch_target"
+                        android:minWidth="@dimen/unit_chip_min_width"
+                        android:text="@string/unit_feet" />
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/details_toggle"
+                    style="@style/Widget.Material3.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:minHeight="@dimen/min_touch_target"
+                    android:minWidth="@dimen/min_touch_target"
+                    android:text="@string/details_show"
+                    android:textColor="@color/hm_on_scrim_secondary" />
+
+                <!--
+                     A wrap_content row set re-measures its width as digit
+                     counts change (e.g. the fix-age row ticking from 9s to
+                     10s), shifting the panel every render; match_parent keeps
+                     the measured width stable. Each row is added as its own
+                     child at runtime.
+                -->
+                <LinearLayout
+                    android:id="@+id/details_panel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:orientation="vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
 </androidx.constraintlayout.widget.ConstraintLayout>

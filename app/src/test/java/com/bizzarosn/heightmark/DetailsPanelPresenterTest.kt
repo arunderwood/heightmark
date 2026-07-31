@@ -22,6 +22,7 @@ class DetailsPanelPresenterTest {
         satellitesVisible: Int = 0,
         pressureHpa: Float? = null,
         readingCount: Int = 0,
+        datum: ElevationDatum? = null,
         useMetric: Boolean = true
     ) = Input(
         isIdle = isIdle,
@@ -32,6 +33,7 @@ class DetailsPanelPresenterTest {
         satellitesVisible = satellitesVisible,
         pressureHpa = pressureHpa,
         readingCount = readingCount,
+        datum = datum,
         useMetric = useMetric,
         locale = Locale.US
     )
@@ -76,7 +78,8 @@ class DetailsPanelPresenterTest {
                 satellitesUsed = 7,
                 satellitesVisible = 11,
                 pressureHpa = 1013.2f,
-                readingCount = 10
+                readingCount = 10,
+                datum = ElevationDatum.MEAN_SEA_LEVEL
             )
         )
 
@@ -88,12 +91,36 @@ class DetailsPanelPresenterTest {
                 Row(R.string.detail_geoid_offset, listOf(meters("37.6"))),
                 Row(R.string.detail_accuracy, listOf(meters("3.0"), meters("5.0"))),
                 Row(R.string.detail_position, listOf("47.61000", "-122.33000")),
-                Row(R.string.detail_fix_age, listOf(12L)),
+                // Fix age coarsens above 10s; see the dedicated tests below
+                Row(R.string.detail_fix_age, listOf(10L)),
                 Row(R.string.detail_satellites, listOf(7, 11)),
                 Row(R.string.detail_pressure, listOf("1013.2")),
+                Row(R.string.detail_datum_msl),
                 Row(R.string.detail_readings, listOf(10))
             ),
             rows
+        )
+    }
+
+    @Test
+    fun `an ellipsoid window names the datum it is averaging on`() {
+        // The one place the panel says what the hero number actually is when
+        // the device cannot convert to sea level
+        val rows = DetailsPanelPresenter.rows(input(datum = ElevationDatum.ELLIPSOID))
+
+        assertEquals(Row(R.string.detail_datum_ellipsoid), rows[rows.lastIndex - 1])
+    }
+
+    @Test
+    fun `the datum row is omitted before the first reading`() {
+        val rows = DetailsPanelPresenter.rows(input(datum = null))
+
+        assertEquals(
+            emptyList<Row>(),
+            rows.filter {
+                it.templateRes == R.string.detail_datum_msl ||
+                    it.templateRes == R.string.detail_datum_ellipsoid
+            }
         )
     }
 
@@ -135,6 +162,26 @@ class DetailsPanelPresenterTest {
             .first { it.templateRes == R.string.detail_accuracy }
 
         assertEquals(listOf(meters("2.5"), UNKNOWN_VALUE), accuracy.args)
+    }
+
+    @Test
+    fun `the accuracy row prefers MSL altitude accuracy over ellipsoidal vertical accuracy`() {
+        val location = TestLocations.detailsFix(verticalAccuracy = 8f, mslAltitudeAccuracy = 2.5f)
+
+        val accuracy = DetailsPanelPresenter.rows(input(location = location))
+            .first { it.templateRes == R.string.detail_accuracy }
+
+        assertEquals(listOf(meters("2.5"), UNKNOWN_VALUE), accuracy.args)
+    }
+
+    @Test
+    fun `the accuracy row falls back to vertical accuracy without an MSL figure`() {
+        val location = TestLocations.detailsFix(verticalAccuracy = 8f, mslAltitudeAccuracy = null)
+
+        val accuracy = DetailsPanelPresenter.rows(input(location = location))
+            .first { it.templateRes == R.string.detail_accuracy }
+
+        assertEquals(listOf(meters("8.0"), UNKNOWN_VALUE), accuracy.args)
     }
 
     @Test
@@ -195,5 +242,37 @@ class DetailsPanelPresenterTest {
             .first { it.templateRes == R.string.detail_fix_age }
 
         assertEquals(listOf(1L), age.args)
+    }
+
+    @Test
+    fun `fix age below ten seconds reports the exact second`() {
+        val location = TestLocations.detailsFix(atNanos = 0L)
+
+        val age = DetailsPanelPresenter.rows(input(location = location, nowNanos = 9_000_000_000L))
+            .first { it.templateRes == R.string.detail_fix_age }
+
+        assertEquals(listOf(9L), age.args)
+    }
+
+    /**
+     * A 1 Hz ticker keeps this row's fix age moving; snapping to ten-second
+     * steps past the threshold means the row's text — and the accessibility
+     * node built from it — settles for nine seconds out of every ten instead
+     * of rewriting on every tick.
+     */
+    @Test
+    fun `fix age at or beyond ten seconds snaps to ten-second steps`() {
+        val location = TestLocations.detailsFix(atNanos = 0L)
+
+        fun ageAt(nowNanos: Long) =
+            DetailsPanelPresenter.rows(input(location = location, nowNanos = nowNanos))
+                .first { it.templateRes == R.string.detail_fix_age }
+                .args
+                .single()
+
+        assertEquals(10L, ageAt(10_000_000_000L))
+        assertEquals(10L, ageAt(15_000_000_000L))
+        assertEquals(10L, ageAt(19_000_000_000L))
+        assertEquals(20L, ageAt(20_000_000_000L))
     }
 }

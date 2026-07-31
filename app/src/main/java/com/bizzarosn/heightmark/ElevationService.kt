@@ -107,16 +107,35 @@ class ElevationService(private val readingsCount: Int) {
         return sqrt(variance)
     }
 
+    // Inverse-variance weighted: a precise fix pulls the average toward itself
+    // much harder than a marginal one, instead of moving it exactly as far as
+    // any other reading admitted into the window.
     private fun getAverageElevation(): Double {
-        return window.map { it.elevationMeters }.average()
+        var weightedSum = 0.0
+        var totalWeight = 0.0
+        window.forEach { reading ->
+            val accuracy = max(reading.accuracyMeters.toDouble(), WEIGHT_ACCURACY_FLOOR_M)
+            val weight = 1.0 / (accuracy * accuracy)
+            weightedSum += reading.elevationMeters * weight
+            totalWeight += weight
+        }
+        return weightedSum / totalWeight
     }
 
     companion object {
-        const val DEFAULT_WINDOW_SIZE = 10
+        // ~30 readings at the tracker's 1 Hz update interval, spanning the
+        // stationary period before the duty cycle turns the GPS radio off
+        // (StillnessDetector's default window), rather than judging "settled"
+        // over a few seconds of nearly fully correlated GNSS vertical error.
+        const val DEFAULT_WINDOW_SIZE = 30
         const val DEFAULT_VERTICAL_ACCURACY_M = 10f
         const val JUMP_CONFIRM_COUNT = 3
         const val JUMP_THRESHOLD_FLOOR_M = 8.0
         const val SETTLE_STDDEV_FLOOR_M = 4.0
         const val SETTLE_ACCURACY_FACTOR = 0.75
+        // A reading claiming sub-meter accuracy should not dominate the
+        // average by a huge margin over one claiming 1 m; this bounds the
+        // weight ratio between the best and worst admitted fixes.
+        const val WEIGHT_ACCURACY_FLOOR_M = 1.0
     }
 }

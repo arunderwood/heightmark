@@ -9,8 +9,8 @@ import javax.inject.Inject
  *
  * Owns the [ElevationService] window together with the flags that describe it
  * — first fix seen, duty-cycle idleness, the post-flush wait for a fresh fix,
- * the last value shown — so a flush and the state explaining it can never
- * drift apart.
+ * the last value shown and the [ElevationDatum] it was measured against — so a
+ * flush and the state explaining it can never drift apart.
  *
  * Following [DetailsPanelPresenter], the clock is an input rather than a
  * [android.os.SystemClock] call, so the whole policy stays assertable in a JVM
@@ -53,11 +53,11 @@ class ElevationSession @Inject constructor(
         private set
 
     /**
-     * The last elevation committed, kept across a flush so the hero number can
-     * stay on screen — dimmed by [ReadingState.Dormant] — until fresh fixes
-     * land. Null until the first fix.
+     * The last elevation committed and the datum it was measured against, kept
+     * across a flush so the hero number can stay on screen — dimmed by
+     * [ReadingState.Dormant] — until fresh fixes land. Null until the first fix.
      */
-    var displayedElevationMeters: Double? = null
+    var displayedElevation: Elevation? = null
         private set
 
     /** Readings currently in the averaging window; the details panel shows it. */
@@ -66,6 +66,9 @@ class ElevationSession @Inject constructor(
 
     private var awaitingFreshFix = false
     private var epoch = 0
+
+    /** True once a fix has been converted to Mean Sea Level this session. */
+    private var hasSeaLevelFix = false
 
     /** Null until the first pause, so a pause timestamp of 0 is still a pause. */
     private var pausedAtElapsedMs: Long? = null
@@ -86,19 +89,57 @@ class ElevationSession @Inject constructor(
 
     /**
      * Adds a converted fix to the average, unless its window was flushed while
-     * it was converting. Returns true when the reading was applied and the
-     * screen needs a repaint.
+     * it was converting or its datum does not belong there. Returns true when
+     * the reading was applied and the screen needs a repaint.
+     *
+     * [accuracyMeters] weighs the reading in the average and feeds the settle
+     * threshold; it defaults to the fix's pre-conversion vertical accuracy but
+     * callers that resolved a tighter bound afterward — the MSL altitude
+     * accuracy the geoid conversion can populate — should pass that instead,
+     * since it is what actually bounds the committed elevation.
      */
-    fun commit(pending: PendingFix, elevationMeters: Double): Boolean {
+    fun commit(
+        pending: PendingFix,
+        elevation: Elevation,
+        accuracyMeters: Float? = pending.verticalAccuracyMeters
+    ): Boolean {
         if (pending.epoch != epoch) return false
-        displayedElevationMeters = elevationService
-            .addElevationReading(elevationMeters, pending.verticalAccuracyMeters)
-            .averageMeters
+        if (!admits(elevation.datum)) return false
+        // Geoid data that only becomes available mid-session shifts every
+        // reading after it by the local separation. Averaging across that
+        // boundary would blend two datums, and letting the jump detector
+        // re-anchor on it would present the change of surface as a climb.
+        if (readingCount > 0 && elevation.datum != displayedElevation?.datum) {
+            flush()
+        }
+        displayedElevation = Elevation(
+            elevationService
+                .addElevationReading(elevation.meters, accuracyMeters)
+                .averageMeters,
+            elevation.datum
+        )
         hasFix = true
+        if (elevation.datum == ElevationDatum.MEAN_SEA_LEVEL) hasSeaLevelFix = true
         awaitingFreshFix = false
         signalStale = false
         return true
     }
+
+    /**
+     * Whether a reading on [datum] may reach the average.
+     *
+     * An ellipsoid height is what [AltitudeResolver] returns when a conversion
+     * fails. Once sea level has been measured this session, such a reading is a
+     * datum shift of tens of meters rather than a change in elevation, so it is
+     * dropped: GNSS delivers a fix a second, and a dropped one costs a second
+     * of freshness against a hero number silently off by the geoid separation.
+     *
+     * A device that cannot load geoid data at all never measures sea level, and
+     * there a consistent ellipsoid window — named as one on screen — is the
+     * best available answer.
+     */
+    private fun admits(datum: ElevationDatum): Boolean =
+        datum == ElevationDatum.MEAN_SEA_LEVEL || !hasSeaLevelFix
 
     /** The GPS radio went off for the stationary duty cycle. */
     fun enterIdle() {

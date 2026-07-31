@@ -1,5 +1,7 @@
 package com.bizzarosn.heightmark
 
+import com.bizzarosn.heightmark.ElevationDatum.ELLIPSOID
+import com.bizzarosn.heightmark.ElevationDatum.MEAN_SEA_LEVEL
 import com.bizzarosn.heightmark.ElevationSession.Companion.MAX_VERTICAL_ACCURACY_M
 import com.bizzarosn.heightmark.ElevationSession.Companion.RESET_AFTER_GAP_MS
 import org.junit.Assert.assertEquals
@@ -14,11 +16,15 @@ class ElevationSessionTest {
     /** A three-reading window keeps settled and progress reachable in three commits. */
     private val session = ElevationSession(ElevationService(WINDOW_SIZE))
 
-    /** Admits and commits a fix in one step, as the fragment does per GNSS fix. */
-    private fun addReading(meters: Double, verticalAccuracy: Float? = null): Boolean {
+    /** Admits and commits a fix in one step, as the tracker does per GNSS fix. */
+    private fun addReading(
+        meters: Double,
+        verticalAccuracy: Float? = null,
+        datum: ElevationDatum = MEAN_SEA_LEVEL
+    ): Boolean {
         val pending = session.offer(TestLocations.fixForAdmission(verticalAccuracy = verticalAccuracy))
         assertNotNull("fix should have been admitted", pending)
-        return session.commit(pending!!, meters)
+        return session.commit(pending!!, Elevation(meters, datum))
     }
 
     // ---- Admission ----
@@ -64,8 +70,33 @@ class ElevationSessionTest {
         assertTrue(addReading(100.0))
 
         assertTrue(session.hasFix)
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
         assertEquals(1, session.readingCount)
+    }
+
+    @Test
+    fun `commit's accuracy override supersedes the pre-conversion accuracy for weighting`() {
+        val first = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        session.commit(first, Elevation(100.0, MEAN_SEA_LEVEL), accuracyMeters = 10f)
+
+        val second = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        // A resolved accuracy far tighter than what admission captured (e.g. a
+        // post-conversion MSL figure) should dominate the weighted average
+        session.commit(second, Elevation(106.0, MEAN_SEA_LEVEL), accuracyMeters = 1f)
+
+        // weight(10 m) = 0.01, weight(1 m) = 1: (100 x 0.01 + 106 x 1) / 1.01
+        assertEquals(105.941, session.displayedElevation!!.meters, 0.001)
+    }
+
+    @Test
+    fun `commit without an override weighs by the fix's pre-conversion accuracy`() {
+        val loose = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        session.commit(loose, Elevation(100.0, MEAN_SEA_LEVEL))
+
+        val tight = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 1f))!!
+        session.commit(tight, Elevation(106.0, MEAN_SEA_LEVEL))
+
+        assertEquals(105.941, session.displayedElevation!!.meters, 0.001)
     }
 
     @Test
@@ -74,10 +105,10 @@ class ElevationSessionTest {
         val pending = session.offer(TestLocations.fixForAdmission())!!
         session.wake()
 
-        assertFalse(session.commit(pending, 250.0))
+        assertFalse(session.commit(pending, Elevation(250.0, MEAN_SEA_LEVEL)))
         assertEquals(0, session.readingCount)
         // The pre-wake value stays on screen rather than jumping to the stale reading
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
     @Test
@@ -87,9 +118,9 @@ class ElevationSessionTest {
         session.onPaused(0L)
         session.onResumed(RESET_AFTER_GAP_MS + 1)
 
-        assertFalse(session.commit(pending, 250.0))
+        assertFalse(session.commit(pending, Elevation(250.0, MEAN_SEA_LEVEL)))
         assertEquals(0, session.readingCount)
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
     @Test
@@ -98,8 +129,79 @@ class ElevationSessionTest {
         session.wake()
 
         assertTrue(addReading(250.0))
-        assertEquals(250.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(250.0, session.displayedElevation!!.meters, 1e-9)
         assertEquals(1, session.readingCount)
+    }
+
+    // ---- Datum policy ----
+
+    @Test
+    fun `a committed reading carries the datum it was measured against`() {
+        addReading(100.0)
+
+        assertEquals(Elevation(100.0, MEAN_SEA_LEVEL), session.displayedElevation)
+    }
+
+    @Test
+    fun `a device without geoid data averages ellipsoid heights consistently`() {
+        // Conversion never succeeds here, so there is no sea-level figure to
+        // mix with: one datum throughout, named as such on screen
+        assertTrue(addReading(100.0, datum = ELLIPSOID))
+        assertTrue(addReading(102.0, datum = ELLIPSOID))
+
+        assertEquals(2, session.readingCount)
+        assertEquals(Elevation(101.0, ELLIPSOID), session.displayedElevation)
+    }
+
+    @Test
+    fun `an unconverted fix is dropped once sea level has been measured`() {
+        addReading(100.0)
+
+        // The fallback is the same place on a different surface, not a 30 m
+        // descent, and at 1 Hz another fix is a second away
+        assertFalse(addReading(70.0, datum = ELLIPSOID))
+        assertEquals(1, session.readingCount)
+        assertEquals(Elevation(100.0, MEAN_SEA_LEVEL), session.displayedElevation)
+    }
+
+    @Test
+    fun `a run of unconverted fixes never re-anchors the window`() {
+        addReading(100.0)
+
+        // A same-side run this long is exactly what the jump detector treats as
+        // a real elevation change, so these must not reach it at all
+        repeat(ElevationService.JUMP_CONFIRM_COUNT) {
+            assertFalse(addReading(70.0, datum = ELLIPSOID))
+        }
+
+        assertEquals(1, session.readingCount)
+        assertEquals(Elevation(100.0, MEAN_SEA_LEVEL), session.displayedElevation)
+    }
+
+    @Test
+    fun `geoid data arriving mid-session flushes the ellipsoid window`() {
+        addReading(100.0, datum = ELLIPSOID)
+        addReading(102.0, datum = ELLIPSOID)
+
+        assertTrue(addReading(70.0))
+
+        // The sea-level reading stands alone: neither averaged with heights on
+        // another datum nor measured against them for a jump
+        assertEquals(1, session.readingCount)
+        assertEquals(Elevation(70.0, MEAN_SEA_LEVEL), session.displayedElevation)
+        // And the flush is invisible on screen — the fix that caused it lands
+        // in the same commit, so the reading never falls back to dormant
+        assertEquals(ReadingState.Converging(1f / WINDOW_SIZE), session.readingState())
+    }
+
+    @Test
+    fun `the datum switch happens once, not on every later fix`() {
+        addReading(100.0, datum = ELLIPSOID)
+        addReading(70.0)
+        addReading(72.0)
+
+        assertEquals(2, session.readingCount)
+        assertEquals(Elevation(71.0, MEAN_SEA_LEVEL), session.displayedElevation)
     }
 
     // ---- Duty cycle and reading state ----
@@ -107,7 +209,7 @@ class ElevationSessionTest {
     @Test
     fun `a session with no fix is acquiring and has nothing to display`() {
         assertEquals(ReadingState.Acquiring, session.readingState())
-        assertNull(session.displayedElevationMeters)
+        assertNull(session.displayedElevation)
         assertFalse(session.hasFix)
     }
 
@@ -130,7 +232,7 @@ class ElevationSessionTest {
         assertEquals(0, session.readingCount)
         // Dormant, not Acquiring: there is still a number worth showing, dimmed
         assertEquals(ReadingState.Dormant, session.readingState())
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
     @Test
@@ -147,7 +249,7 @@ class ElevationSessionTest {
         session.wake()
 
         assertEquals(ReadingState.Acquiring, session.readingState())
-        assertNull(session.displayedElevationMeters)
+        assertNull(session.displayedElevation)
     }
 
     @Test
@@ -180,7 +282,7 @@ class ElevationSessionTest {
 
         assertEquals(0, session.readingCount)
         assertEquals(ReadingState.Dormant, session.readingState())
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
     @Test
@@ -211,7 +313,7 @@ class ElevationSessionTest {
         assertEquals(ReadingState.Dormant, session.readingState())
         // Unlike a flush, the averaging window survives a signal-loss expiry
         assertEquals(WINDOW_SIZE, session.readingCount)
-        assertEquals(100.0, session.displayedElevationMeters!!, 1e-9)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
     @Test

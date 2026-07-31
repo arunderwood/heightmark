@@ -2,6 +2,7 @@ package com.bizzarosn.heightmark
 
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.math.sqrt
 
 class ReadingStateTest {
 
@@ -93,12 +94,20 @@ class ReadingStateTest {
     fun `converging ramps the hero from dimmed to full as the window fills`() {
         val dimmed = ReadingState.DIMMED_TEXT_ALPHA
         assertEquals(dimmed, ReadingState.heroAlpha(ReadingState.Converging(0f)), 1e-6f)
+        // The ramp follows visualProgress (sqrt of fill), not fill linearly
         assertEquals(
-            dimmed + (1f - dimmed) / 2f,
+            dimmed + (1f - dimmed) * sqrt(0.5f),
             ReadingState.heroAlpha(ReadingState.Converging(0.5f)),
             1e-6f
         )
         assertEquals(1f, ReadingState.heroAlpha(ReadingState.Converging(1f)), 1e-6f)
+    }
+
+    @Test
+    fun `visualProgress front-loads the ramp ahead of the literal window fill`() {
+        val state = ReadingState.Converging(0.25f)
+        assertEquals(0.25f, state.progress, 1e-6f)
+        assertEquals(0.5f, state.visualProgress, 1e-6f)
     }
 
     @Test

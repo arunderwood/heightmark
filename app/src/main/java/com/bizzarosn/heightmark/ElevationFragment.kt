@@ -9,7 +9,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
@@ -39,10 +42,11 @@ class ElevationFragment : Fragment() {
 
     private val tracker: ElevationTracker by viewModels()
 
+    private lateinit var elevationLabel: TextView
     private lateinit var elevationTextView: TextView
     private lateinit var stabilityLine: StabilityLineView
     private lateinit var detailsToggle: TextView
-    private lateinit var detailsPanel: TextView
+    private lateinit var detailsPanel: ViewGroup
 
     private var useMetricUnit = true
     private var showDetails = false
@@ -66,11 +70,29 @@ class ElevationFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        elevationLabel = view.findViewById(R.id.elevation_label)
         elevationTextView = view.findViewById(R.id.elevation_text_view)
         stabilityLine = view.findViewById(R.id.stability_line)
         detailsToggle = view.findViewById(R.id.details_toggle)
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
+
+        // With the BottomNavigationView gone, nothing else consumes the
+        // navigation-bar inset; the scrim column now absorbs it itself so the
+        // details toggle doesn't end up under the gesture bar.
+        val contentContainer = view.findViewById<View>(R.id.content_container)
+        val initialPaddingLeft = contentContainer.paddingLeft
+        val initialPaddingRight = contentContainer.paddingRight
+        val initialPaddingBottom = contentContainer.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(contentContainer) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(
+                left = initialPaddingLeft + systemBars.left,
+                right = initialPaddingRight + systemBars.right,
+                bottom = initialPaddingBottom + systemBars.bottom
+            )
+            insets
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
@@ -135,12 +157,14 @@ class ElevationFragment : Fragment() {
     }
 
     /**
-     * The only writer of the hero TextView. Both modes set the same properties
-     * so switching modes can never leave a stale one behind.
+     * The only writer of the hero TextView and the label naming it. Both modes
+     * set the same properties so switching modes can never leave a stale one
+     * behind.
      */
     private fun renderHero(hero: ElevationUiState.Hero) {
         when (hero) {
             is ElevationUiState.Hero.Status -> {
+                elevationLabel.setText(R.string.current_elevation)
                 // Status messages use headline type; the hero display size is
                 // reserved for the value
                 applyTextAppearance(com.google.android.material.R.attr.textAppearanceHeadlineSmall)
@@ -153,6 +177,13 @@ class ElevationFragment : Fragment() {
                 elevationTextView.text = getString(hero.messageRes)
             }
             is ElevationUiState.Hero.Value -> {
+                // A height the device could not convert is not sea-level
+                // elevation, and the label over the number says so rather than
+                // letting it pass for one
+                val ellipsoid = hero.datum == ElevationDatum.ELLIPSOID
+                elevationLabel.setText(
+                    if (ellipsoid) R.string.ellipsoid_elevation else R.string.current_elevation
+                )
                 applyTextAppearance(
                     com.google.android.material.R.attr.textAppearanceDisplayLargeEmphasized
                 )
@@ -166,7 +197,9 @@ class ElevationFragment : Fragment() {
                     R.string.elevation_text, formatted.value, getString(formatted.unitRes)
                 )
                 elevationTextView.contentDescription = getString(
-                    R.string.elevation_a11y, formatted.value, getString(formatted.spokenUnitRes)
+                    if (ellipsoid) R.string.elevation_a11y_ellipsoid else R.string.elevation_a11y,
+                    formatted.value,
+                    getString(formatted.spokenUnitRes)
                 )
             }
         }
@@ -192,6 +225,13 @@ class ElevationFragment : Fragment() {
             .start()
     }
 
+    /**
+     * Renders each [DetailsPanelPresenter.Row] as its own child TextView,
+     * recycled across calls and updated only where the resolved text
+     * changed — so a screen reader mid-readout on an untouched row never
+     * has that row's node rewritten under it, and the 1 Hz fix-age ticker
+     * invalidates only the one row it affects.
+     */
     private fun renderDetails(facts: ElevationUiState.DetailsFacts?) {
         if (facts == null) return
         val rows = DetailsPanelPresenter.rows(
@@ -204,12 +244,25 @@ class ElevationFragment : Fragment() {
                 satellitesVisible = facts.satellitesVisible,
                 pressureHpa = facts.pressureHpa,
                 readingCount = facts.readingCount,
+                datum = facts.datum,
                 useMetric = useMetricUnit,
                 locale = Locale.getDefault()
             )
         )
-        detailsPanel.text = rows.joinToString("\n") { resolve(it) }
+        rows.forEachIndexed { index, row ->
+            val text = resolve(row)
+            val rowView = detailsPanel.getChildAt(index) as? TextView
+                ?: createDetailsRowView().also { detailsPanel.addView(it, index) }
+            if (rowView.text != text) rowView.text = text
+        }
+        while (detailsPanel.childCount > rows.size) {
+            detailsPanel.removeViewAt(detailsPanel.childCount - 1)
+        }
     }
+
+    private fun createDetailsRowView(): TextView =
+        LayoutInflater.from(requireContext())
+            .inflate(R.layout.item_detail_row, detailsPanel, false) as TextView
 
     /** Resolves a presenter row, flattening the one nested length resource. */
     private fun resolve(row: DetailsPanelPresenter.Row): String {
@@ -228,13 +281,20 @@ class ElevationFragment : Fragment() {
             return
         }
         if (locationOffDialog?.isShowing == true) return
+        // Every way the user can close this reports back, so the state stops
+        // asking; the dismissal in onPause deliberately does not, leaving the
+        // question standing for whenever the screen comes back
         locationOffDialog = AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.location_services_off))
             .setMessage(getString(R.string.location_services_off_message))
             .setPositiveButton(getString(R.string.open_location_settings)) { _, _ ->
+                tracker.onLocationPromptAnswered()
                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                tracker.onLocationPromptAnswered()
+            }
+            .setOnCancelListener { tracker.onLocationPromptAnswered() }
             .create()
         locationOffDialog?.show()
     }

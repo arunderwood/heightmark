@@ -25,6 +25,7 @@ object TestLocations {
         msl: Double? = null,
         verticalAccuracy: Float? = null,
         horizontalAccuracy: Float? = null,
+        mslAltitudeAccuracy: Float? = null,
         latitude: Double = 0.0,
         longitude: Double = 0.0,
         atNanos: Long = 0L
@@ -34,6 +35,8 @@ object TestLocations {
         verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
         every { location.hasAccuracy() } returns (horizontalAccuracy != null)
         horizontalAccuracy?.let { every { location.accuracy } returns it }
+        every { location.hasMslAltitudeAccuracy() } returns (mslAltitudeAccuracy != null)
+        mslAltitudeAccuracy?.let { every { location.mslAltitudeAccuracyMeters } returns it }
         every { location.latitude } returns latitude
         every { location.longitude } returns longitude
         every { location.elapsedRealtimeNanos } returns atNanos
@@ -50,6 +53,30 @@ object TestLocations {
     ): Location {
         val location = mockk<Location>()
         every { location.hasAltitude() } returns hasAltitude
+        every { location.hasVerticalAccuracy() } returns (verticalAccuracy != null)
+        verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
+        return location
+    }
+
+    /**
+     * A fix for [IdleWakePolicy] tests. [driftMeters] only matters when this
+     * fix plays the anchor role: distanceTo is only ever called with the
+     * anchor as receiver, so model the anchor's drift parameter as its
+     * distance to everything, same convention as [movingFix].
+     */
+    fun idleWakeFix(
+        driftMeters: Float = 0f,
+        horizontalAccuracy: Float? = null,
+        hasAltitude: Boolean = true,
+        altitude: Double = 100.0,
+        verticalAccuracy: Float? = null
+    ): Location {
+        val location = mockk<Location>()
+        every { location.distanceTo(any()) } returns driftMeters
+        every { location.hasAccuracy() } returns (horizontalAccuracy != null)
+        horizontalAccuracy?.let { every { location.accuracy } returns it }
+        every { location.hasAltitude() } returns hasAltitude
+        every { location.altitude } returns altitude
         every { location.hasVerticalAccuracy() } returns (verticalAccuracy != null)
         verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
         return location

@@ -77,6 +77,27 @@ class ElevationServiceTest {
         assertEquals(100.5, result.averageMeters, 0.001)
     }
 
+    // --- Inverse-variance weighting ---
+
+    @Test
+    fun `weighted average favors the more accurate reading`() {
+        elevationService.addElevationReading(100.0, verticalAccuracyMeters = 10f)
+        val result = elevationService.addElevationReading(104.0, verticalAccuracyMeters = 1f)
+
+        // weight(10 m) = 1 / 10^2 = 0.01, weight(1 m) = 1 / 1^2 = 1
+        // (100 x 0.01 + 104 x 1) / 1.01
+        assertEquals(103.960, result.averageMeters, 0.001)
+    }
+
+    @Test
+    fun `weight accuracy floor treats sub-meter accuracy as one meter`() {
+        elevationService.addElevationReading(100.0, verticalAccuracyMeters = 0.1f)
+        val result = elevationService.addElevationReading(102.0, verticalAccuracyMeters = 0.5f)
+
+        // Both accuracies are floored to 1 m before weighting, so they weigh equally
+        assertEquals(101.0, result.averageMeters, 0.001)
+    }
+
     // --- Jump detection ---
 
     @Test
