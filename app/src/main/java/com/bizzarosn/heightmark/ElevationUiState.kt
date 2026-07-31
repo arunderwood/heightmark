@@ -19,7 +19,12 @@ data class ElevationUiState(
      * alongside it would contradict each other, so hosts hide the line.
      */
     val readingState: ReadingState?,
-    /** Set only for [Blocked.LocationServicesOff], the one block a user can fix. */
+    /**
+     * Set only for [Blocked.LocationServicesOff], the one block a user can fix,
+     * and only until they have answered it. It is a question being asked, not a
+     * property of being blocked: a host renders it as a dialog, and a dialog the
+     * user has already closed must not come back on its own.
+     */
     val promptLocationSettings: Boolean,
     /** Null while the diagnostic panel is closed; nothing feeds it then. */
     val details: DetailsFacts?
@@ -65,9 +70,17 @@ data class ElevationUiState(
          * because that reading is no longer being kept current. Otherwise the
          * last committed elevation wins, and the search text only appears while
          * there has never been one.
+         *
+         * [locationPromptAnswered] silences the settings prompt for as long as
+         * this occurrence of the block lasts. Without it the ask would ride on
+         * every emission, and the diagnostic panel's ticker alone republishes
+         * once a second — enough to put a dismissed dialog straight back up.
+         * The hero still carries the block's message either way, so silencing
+         * the ask never hides why tracking stopped.
          */
         fun derive(
             blocked: Blocked?,
+            locationPromptAnswered: Boolean,
             searchTimedOut: Boolean,
             elevationMeters: Double?,
             readingState: ReadingState,
@@ -76,7 +89,8 @@ data class ElevationUiState(
             ElevationUiState(
                 hero = Hero.Status(blocked.messageRes),
                 readingState = null,
-                promptLocationSettings = blocked == Blocked.LocationServicesOff,
+                promptLocationSettings =
+                    blocked == Blocked.LocationServicesOff && !locationPromptAnswered,
                 details = details
             )
         } else {

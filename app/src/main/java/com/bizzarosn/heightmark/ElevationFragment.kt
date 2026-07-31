@@ -227,13 +227,20 @@ class ElevationFragment : Fragment() {
             return
         }
         if (locationOffDialog?.isShowing == true) return
+        // Every way the user can close this reports back, so the state stops
+        // asking; the dismissal in onPause deliberately does not, leaving the
+        // question standing for whenever the screen comes back
         locationOffDialog = AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.location_services_off))
             .setMessage(getString(R.string.location_services_off_message))
             .setPositiveButton(getString(R.string.open_location_settings)) { _, _ ->
+                tracker.onLocationPromptAnswered()
                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                tracker.onLocationPromptAnswered()
+            }
+            .setOnCancelListener { tracker.onLocationPromptAnswered() }
             .create()
         locationOffDialog?.show()
     }
