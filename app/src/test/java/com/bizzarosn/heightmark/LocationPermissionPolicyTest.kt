@@ -8,7 +8,9 @@ import org.junit.Test
 /**
  * Locks in the permission decision table. The expectations mirror the two
  * historical when-chains in LocationPermissionHandler (checkPermission and
- * handlePermissionResult), which this policy replaced.
+ * handlePermissionResult), which this policy replaced, plus the
+ * [hasRequestedBefore] branch that tells a true first launch apart from a
+ * returning, already-permanently-denied user.
  */
 class LocationPermissionPolicyTest {
 
@@ -16,12 +18,14 @@ class LocationPermissionPolicyTest {
         fine: Boolean = false,
         any: Boolean = false,
         rationale: Boolean = false,
-        isResult: Boolean
+        isResult: Boolean,
+        hasRequestedBefore: Boolean = true
     ) = LocationPermissionPolicy.resolve(
         fineGranted = fine,
         anyGranted = any,
         shouldShowRationale = rationale,
-        isRequestResult = isResult
+        isRequestResult = isResult,
+        hasRequestedBefore = hasRequestedBefore
     )
 
     @Test
@@ -29,10 +33,16 @@ class LocationPermissionPolicyTest {
         for (isResult in listOf(false, true)) {
             // fineGranted implies anyGranted in practice; both shapes resolve the same
             for (any in listOf(false, true)) {
-                assertEquals(
-                    Resolution.Report(LocationPermissionState.Granted, null),
-                    resolve(fine = true, any = any, isResult = isResult)
-                )
+                // hasRequestedBefore must not matter once fine is granted
+                for (hasRequestedBefore in listOf(false, true)) {
+                    assertEquals(
+                        Resolution.Report(LocationPermissionState.Granted, null),
+                        resolve(
+                            fine = true, any = any, isResult = isResult,
+                            hasRequestedBefore = hasRequestedBefore
+                        )
+                    )
+                }
             }
         }
     }
@@ -40,12 +50,19 @@ class LocationPermissionPolicyTest {
     @Test
     fun `coarse-only grant reports CoarseOnly with the upgrade dialog on both paths`() {
         for (isResult in listOf(false, true)) {
-            // rationale must not matter once something is granted
+            // rationale and hasRequestedBefore must not matter once something is granted
             for (rationale in listOf(false, true)) {
-                assertEquals(
-                    Resolution.Report(LocationPermissionState.CoarseOnly, Dialog.PreciseUpgrade),
-                    resolve(any = true, rationale = rationale, isResult = isResult)
-                )
+                for (hasRequestedBefore in listOf(false, true)) {
+                    assertEquals(
+                        Resolution.Report(
+                            LocationPermissionState.CoarseOnly, Dialog.PreciseUpgrade
+                        ),
+                        resolve(
+                            any = true, rationale = rationale, isResult = isResult,
+                            hasRequestedBefore = hasRequestedBefore
+                        )
+                    )
+                }
             }
         }
     }
@@ -53,25 +70,46 @@ class LocationPermissionPolicyTest {
     @Test
     fun `nothing granted with rationale reports RequiresRationale on both paths`() {
         for (isResult in listOf(false, true)) {
+            // hasRequestedBefore must not matter once a rationale is owed
+            for (hasRequestedBefore in listOf(false, true)) {
+                assertEquals(
+                    Resolution.Report(
+                        LocationPermissionState.RequiresRationale, Dialog.PermissionRequired
+                    ),
+                    resolve(
+                        rationale = true, isResult = isResult,
+                        hasRequestedBefore = hasRequestedBefore
+                    )
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `a request result always reports PermanentlyDenied regardless of hasRequestedBefore`() {
+        for (hasRequestedBefore in listOf(false, true)) {
             assertEquals(
                 Resolution.Report(
-                    LocationPermissionState.RequiresRationale, Dialog.PermissionRequired
+                    LocationPermissionState.PermanentlyDenied, Dialog.PermanentDenial
                 ),
-                resolve(rationale = true, isResult = isResult)
+                resolve(isResult = true, hasRequestedBefore = hasRequestedBefore)
             )
         }
     }
 
     @Test
-    fun `nothing granted and no rationale requests permissions on the check path`() {
-        assertEquals(Resolution.RequestPermissions, resolve(isResult = false))
+    fun `a true first launch reports NotYetRequested with no dialog on the check path`() {
+        assertEquals(
+            Resolution.Report(LocationPermissionState.NotYetRequested, null),
+            resolve(isResult = false, hasRequestedBefore = false)
+        )
     }
 
     @Test
-    fun `nothing granted and no rationale is a permanent denial on the result path`() {
+    fun `a returning already-denied user requests permissions on the check path`() {
         assertEquals(
-            Resolution.Report(LocationPermissionState.PermanentlyDenied, Dialog.PermanentDenial),
-            resolve(isResult = true)
+            Resolution.RequestPermissions,
+            resolve(isResult = false, hasRequestedBefore = true)
         )
     }
 }

@@ -115,7 +115,8 @@ class ElevationTracker @Inject constructor(
             }
             is LocationPermissionState.CoarseOnly ->
                 block(ElevationUiState.Blocked.PreciseLocationRequired)
-            is LocationPermissionState.RequiresRationale ->
+            is LocationPermissionState.RequiresRationale,
+            is LocationPermissionState.NotYetRequested ->
                 block(ElevationUiState.Blocked.PermissionRequired)
             is LocationPermissionState.PermanentlyDenied ->
                 block(ElevationUiState.Blocked.PermissionPermanentlyDenied)

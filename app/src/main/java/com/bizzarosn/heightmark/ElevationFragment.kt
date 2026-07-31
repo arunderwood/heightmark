@@ -52,6 +52,7 @@ class ElevationFragment : Fragment() {
 
     private var useMetricUnit = true
     private var showDetails = false
+    private var hasRequestedLocationPermission = false
     private var locationOffDialog: AlertDialog? = null
 
     private lateinit var permissionHandler: LocationPermissionHandler
@@ -63,7 +64,9 @@ class ElevationFragment : Fragment() {
             fragment = this,
             onPermissionStateChanged = { state -> tracker.onPermissionState(state) },
             hasShownUpgradeDialog = { tracker.upgradeDialogShown },
-            onUpgradeDialogShown = { tracker.upgradeDialogShown = true }
+            onUpgradeDialogShown = { tracker.upgradeDialogShown = true },
+            hasRequestedPermissionBefore = { hasRequestedLocationPermission },
+            onPermissionRequested = ::markPermissionRequested
         )
         permissionHandler.initialize()
     }
@@ -104,6 +107,8 @@ class ElevationFragment : Fragment() {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
             unitToggleGroup.check(if (useMetricUnit) R.id.button_meters else R.id.button_feet)
             applyDetailsVisibility(preferencesRepository.showDetails.first())
+            hasRequestedLocationPermission =
+                preferencesRepository.hasRequestedLocationPermission.first()
             permissionHandler.checkPermission()
         }
 
@@ -143,6 +148,19 @@ class ElevationFragment : Fragment() {
         super.onPause()
         tracker.onBackground()
         dismissLocationOffDialog()
+    }
+
+    /**
+     * Records that the system permission dialog has been triggered at least
+     * once, so a later cold start never mistakes a returning, already-decided
+     * user for a true first launch. Persisting on the fragment's scope, not
+     * the view's, for the same reason the toggles do: a rotation right after
+     * the request must not cancel the write.
+     */
+    private fun markPermissionRequested() {
+        if (hasRequestedLocationPermission) return
+        hasRequestedLocationPermission = true
+        lifecycleScope.launch { preferencesRepository.setHasRequestedLocationPermission(true) }
     }
 
     private fun applyDetailsVisibility(show: Boolean) {

@@ -56,7 +56,7 @@ The app is a single screen (`ElevationFragment`) plus a set of focused collabora
 - **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll (barometer-less devices only)
 - **PressureDeltaDetector**: Sustained-pressure-change detection with weather-drift absorption and HVAC/door-transient rejection
 - **LocationPermissionHandler**: Lifecycle-aware permission handler with state management, including the Android 12+ coarse-only ("approximate") grant state. Its file also holds the top-level `Context.hasFineLocationPermission()` that both it and `ElevationTracker` gate on
-- **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel)
+- **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel, whether the location-permission dialog has ever been requested)
 - **LengthFormatter**: The single home of the metric/imperial branch — value conversion, number formatting, and unit-resource selection. Returns resource IDs for callers to resolve: `Detail` for a panel row, `Hero` for the big number, each pairing a value with the unit that names it
 - **LocationPermissionPolicy**: Pure decision table mapping grant state to a `Resolution` (report a state, show a dialog, or re-request)
 - **UnitConverter**: `object` holding `FEET_PER_METER` and `metersToFeet()`
@@ -74,9 +74,10 @@ Do not "simplify" the remaining five into `@Inject constructor`s; each would eit
 
 ### Permission Handling
 
-- **LocationPermissionState**: Sealed class with states Granted, CoarseOnly, PermanentlyDenied, RequiresRationale
+- **LocationPermissionState**: Sealed class with states Granted, CoarseOnly, PermanentlyDenied, RequiresRationale, NotYetRequested
 - **Lifecycle-aware**: Automatically cleans up dialogs and resources when fragment is destroyed
 - **Multiple permissions**: Handles both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; coarse-only grants get an in-context precise-location upgrade prompt because GPS requires fine
+- **First launch**: On a true first launch the system permission dialog is not auto-fired. `LocationPermissionPolicy.resolve` takes a `hasRequestedBefore` input — backed by `PreferencesRepository.hasRequestedLocationPermission`, since the distinction must survive process death — that separates "never asked" from "asked before and now stuck at a rationale-less denial" (Android's `shouldShowRequestPermissionRationale` returns false for both). A true first launch resolves to `NotYetRequested`, which renders the same blocked screen as `RequiresRationale` (`Blocked.PermissionRequired`, "Location permission is needed to show your elevation." + Grant Permission button) but with no dialog at all — the blocked message is the up-front rationale, and the user triggers the system dialog themselves via the persistent button. `LocationPermissionHandler.requestPermissions()` is the single choke point that marks the flag, since every request path (the auto-fire fallback, each dialog's positive button, and the blocked screen's button) funnels through it. A returning user who is already permanently denied still gets the old auto-fire-then-silently-redeny fallback, unchanged.
 
 ## Key Technical Details
 
