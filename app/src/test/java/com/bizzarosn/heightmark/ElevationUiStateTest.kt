@@ -18,13 +18,14 @@ class ElevationUiStateTest {
         locationPromptAnswered: Boolean = false,
         searchTimedOut: Boolean = false,
         elevationMeters: Double? = null,
+        datum: ElevationDatum = ElevationDatum.MEAN_SEA_LEVEL,
         readingState: ReadingState = ReadingState.Stable,
         details: ElevationUiState.DetailsFacts? = null
     ) = ElevationUiState.derive(
         blocked = blocked,
         locationPromptAnswered = locationPromptAnswered,
         searchTimedOut = searchTimedOut,
-        elevationMeters = elevationMeters,
+        elevation = elevationMeters?.let { Elevation(it, datum) },
         readingState = readingState,
         details = details
     )
@@ -36,7 +37,8 @@ class ElevationUiStateTest {
         satellitesUsed = 3,
         satellitesVisible = 9,
         pressureHpa = null,
-        readingCount = 4
+        readingCount = 4,
+        datum = ElevationDatum.MEAN_SEA_LEVEL
     )
 
     @Test
@@ -58,8 +60,18 @@ class ElevationUiStateTest {
     @Test
     fun `a committed elevation outranks a timed-out search`() {
         assertEquals(
-            ElevationUiState.Hero.Value(1234.5),
+            ElevationUiState.Hero.Value(1234.5, ElevationDatum.MEAN_SEA_LEVEL),
             derive(searchTimedOut = true, elevationMeters = 1234.5).hero
+        )
+    }
+
+    @Test
+    fun `the hero carries the datum its reading was measured against`() {
+        // Without this the screen would label a raw GNSS height, tens of meters
+        // off sea level, as the elevation it normally promises
+        assertEquals(
+            ElevationUiState.Hero.Value(1234.5, ElevationDatum.ELLIPSOID),
+            derive(elevationMeters = 1234.5, datum = ElevationDatum.ELLIPSOID).hero
         )
     }
 

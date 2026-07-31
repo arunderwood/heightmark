@@ -21,6 +21,7 @@ class DetailsPanelPresenterTest {
         satellitesVisible: Int = 0,
         pressureHpa: Float? = null,
         readingCount: Int = 0,
+        datum: ElevationDatum? = null,
         useMetric: Boolean = true
     ) = Input(
         isIdle = isIdle,
@@ -30,6 +31,7 @@ class DetailsPanelPresenterTest {
         satellitesVisible = satellitesVisible,
         pressureHpa = pressureHpa,
         readingCount = readingCount,
+        datum = datum,
         useMetric = useMetric,
         locale = Locale.US
     )
@@ -74,7 +76,8 @@ class DetailsPanelPresenterTest {
                 satellitesUsed = 7,
                 satellitesVisible = 11,
                 pressureHpa = 1013.2f,
-                readingCount = 10
+                readingCount = 10,
+                datum = ElevationDatum.MEAN_SEA_LEVEL
             )
         )
 
@@ -90,9 +93,32 @@ class DetailsPanelPresenterTest {
                 Row(R.string.detail_fix_age, listOf(10L)),
                 Row(R.string.detail_satellites, listOf(7, 11)),
                 Row(R.string.detail_pressure, listOf("1013.2")),
+                Row(R.string.detail_datum_msl),
                 Row(R.string.detail_readings, listOf(10))
             ),
             rows
+        )
+    }
+
+    @Test
+    fun `an ellipsoid window names the datum it is averaging on`() {
+        // The one place the panel says what the hero number actually is when
+        // the device cannot convert to sea level
+        val rows = DetailsPanelPresenter.rows(input(datum = ElevationDatum.ELLIPSOID))
+
+        assertEquals(Row(R.string.detail_datum_ellipsoid), rows[rows.lastIndex - 1])
+    }
+
+    @Test
+    fun `the datum row is omitted before the first reading`() {
+        val rows = DetailsPanelPresenter.rows(input(datum = null))
+
+        assertEquals(
+            emptyList<Row>(),
+            rows.filter {
+                it.templateRes == R.string.detail_datum_msl ||
+                    it.templateRes == R.string.detail_datum_ellipsoid
+            }
         )
     }
 

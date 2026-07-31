@@ -62,7 +62,7 @@ class ElevationTracker @Inject constructor(
             blocked = null,
             locationPromptAnswered = false,
             searchTimedOut = false,
-            elevationMeters = null,
+            elevation = null,
             readingState = ReadingState.Acquiring,
             details = null
         )
@@ -225,13 +225,14 @@ class ElevationTracker @Inject constructor(
         viewModelScope.launch {
             // Geoid data loads from disk on first use in a region
             val elevation = withContext(Dispatchers.IO) {
-                altitudeResolver.mslAltitudeMeters(location)
+                altitudeResolver.resolve(location)
             }
             // The conversion may have populated a tighter, post-conversion
             // accuracy bound on the same Location; prefer it over the
             // pre-conversion figure session.offer() captured
             val accuracy = location.mslAltitudeAccuracyOrNull() ?: pending.verticalAccuracyMeters
-            // The window was flushed while this fix was converting: drop it
+            // The window was flushed while this fix was converting, or the fix
+            // came back on the wrong datum to join it: either way, drop it
             if (!session.commit(pending, elevation, accuracy)) return@launch
             lastLocation = location
             publish()
@@ -323,7 +324,7 @@ class ElevationTracker @Inject constructor(
             blocked = blocked,
             locationPromptAnswered = locationPromptAnswered,
             searchTimedOut = searchTimedOut,
-            elevationMeters = session.displayedElevationMeters,
+            elevation = session.displayedElevation,
             readingState = session.readingState(),
             details = detailsFacts()
         )
@@ -338,7 +339,8 @@ class ElevationTracker @Inject constructor(
             satellitesUsed = detailsSources.satellitesUsed,
             satellitesVisible = detailsSources.satellitesVisible,
             pressureHpa = detailsSources.pressureHpa,
-            readingCount = session.readingCount
+            readingCount = session.readingCount,
+            datum = session.displayedElevation?.datum
         )
     }
 

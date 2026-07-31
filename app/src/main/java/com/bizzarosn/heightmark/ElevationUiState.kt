@@ -35,8 +35,13 @@ data class ElevationUiState(
         /** Explanatory text: still searching, or a reason there is nothing to show. */
         data class Status(@param:StringRes val messageRes: Int) : Hero
 
-        /** A real reading, in meters, for the host to format and label. */
-        data class Value(val meters: Double) : Hero
+        /**
+         * A real reading, in meters, for the host to format and label. The
+         * [datum] travels with it: a height above the ellipsoid is not the
+         * sea-level elevation this screen otherwise promises, and the label
+         * over the number has to say which one it is.
+         */
+        data class Value(val meters: Double, val datum: ElevationDatum) : Hero
     }
 
     /** Why tracking cannot run. Each replaces the reading with its message. */
@@ -61,7 +66,9 @@ data class ElevationUiState(
         val satellitesUsed: Int,
         val satellitesVisible: Int,
         val pressureHpa: Float?,
-        val readingCount: Int
+        val readingCount: Int,
+        /** The datum the window is averaging on; null before the first fix. */
+        val datum: ElevationDatum?
     )
 
     companion object {
@@ -82,7 +89,7 @@ data class ElevationUiState(
             blocked: Blocked?,
             locationPromptAnswered: Boolean,
             searchTimedOut: Boolean,
-            elevationMeters: Double?,
+            elevation: Elevation?,
             readingState: ReadingState,
             details: DetailsFacts?
         ): ElevationUiState = if (blocked != null) {
@@ -95,7 +102,7 @@ data class ElevationUiState(
             )
         } else {
             ElevationUiState(
-                hero = elevationMeters?.let { Hero.Value(it) } ?: Hero.Status(
+                hero = elevation?.let { Hero.Value(it.meters, it.datum) } ?: Hero.Status(
                     if (searchTimedOut) R.string.still_searching else R.string.loading_elevation
                 ),
                 readingState = readingState,
