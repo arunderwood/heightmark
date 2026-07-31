@@ -19,6 +19,7 @@ object DetailsPanelPresenter {
 
     data class Input(
         val isIdle: Boolean,
+        val isBlocked: Boolean,
         val signalStale: Boolean,
         val location: Location?,
         val nowElapsedRealtimeNanos: Long,
@@ -41,6 +42,11 @@ object DetailsPanelPresenter {
         val rows = mutableListOf<Row>()
         rows += Row(
             when {
+                // A block outranks idle: the duty cycle's own idle flag is
+                // meaningless once tracking has stopped for another reason;
+                // idle in turn outranks a stale signal, whose silence is the
+                // duty cycle's own doing
+                input.isBlocked -> R.string.detail_state_blocked
                 input.isIdle -> R.string.detail_state_idle
                 input.signalStale -> R.string.detail_state_no_signal
                 else -> R.string.detail_state_tracking
