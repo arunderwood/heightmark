@@ -55,12 +55,37 @@ class ElevationUiStateTest {
         // The number is no longer being kept current, so leaving it up would
         // present a stale elevation as a live one
         assertEquals(
-            ElevationUiState.Hero.Status(R.string.location_permission_required),
+            ElevationUiState.Hero.Status(R.string.location_permission_blocked_message),
             derive(
                 blocked = ElevationUiState.Blocked.PermissionRequired,
                 elevationMeters = 1234.5
             ).hero
         )
+    }
+
+    @Test
+    fun `each block carries the persistent action its message asks for`() {
+        assertEquals(
+            ElevationUiState.BlockedAction.RequestPermission,
+            derive(blocked = ElevationUiState.Blocked.PermissionRequired).blockedAction
+        )
+        assertEquals(
+            ElevationUiState.BlockedAction.OpenAppSettings,
+            derive(blocked = ElevationUiState.Blocked.PermissionPermanentlyDenied).blockedAction
+        )
+        assertEquals(
+            ElevationUiState.BlockedAction.RequestPermission,
+            derive(blocked = ElevationUiState.Blocked.PreciseLocationRequired).blockedAction
+        )
+        assertEquals(
+            ElevationUiState.BlockedAction.OpenLocationSettings,
+            derive(blocked = ElevationUiState.Blocked.LocationServicesOff).blockedAction
+        )
+    }
+
+    @Test
+    fun `no block means no persistent action`() {
+        assertNull(derive(elevationMeters = 10.0).blockedAction)
     }
 
     @Test
@@ -102,6 +127,7 @@ class ElevationUiStateTest {
         // not blank it out
         val facts = ElevationUiState.DetailsFacts(
             isIdle = false,
+            isBlocked = true,
             location = null,
             nowElapsedRealtimeNanos = 0L,
             satellitesUsed = 3,

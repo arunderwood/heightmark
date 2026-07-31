@@ -58,6 +58,21 @@
             android:accessibilityLiveRegion="polite"
             android:contentDescription="@string/stability_line_a11y" />
 
+        <!-- Visible only while ElevationUiState.blockedAction is non-null; the
+             fragment sets both visibility and label, never the layout. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/blocked_action_button"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:minHeight="@dimen/min_touch_target"
+            android:minWidth="@dimen/min_touch_target"
+            android:theme="@style/ThemeOverlay.HeightMark.OnImage"
+            android:visibility="gone"
+            tools:text="@string/grant_permission"
+            tools:visibility="visible" />
+
         <com.google.android.material.button.MaterialButtonToggleGroup
             android:id="@+id/unit_toggle_group"
             android:layout_width="wrap_content"

@@ -19,6 +19,7 @@ object DetailsPanelPresenter {
 
     data class Input(
         val isIdle: Boolean,
+        val isBlocked: Boolean,
         val location: Location?,
         val nowElapsedRealtimeNanos: Long,
         val satellitesUsed: Int,
@@ -38,7 +39,13 @@ object DetailsPanelPresenter {
     fun rows(input: Input): List<Row> {
         val rows = mutableListOf<Row>()
         rows += Row(
-            if (input.isIdle) R.string.detail_state_idle else R.string.detail_state_tracking
+            when {
+                // A block outranks idle: the duty cycle's own idle flag is
+                // meaningless once tracking has stopped for another reason
+                input.isBlocked -> R.string.detail_state_blocked
+                input.isIdle -> R.string.detail_state_idle
+                else -> R.string.detail_state_tracking
+            }
         )
 
         val location = input.location

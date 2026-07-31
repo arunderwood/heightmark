@@ -21,6 +21,8 @@ data class ElevationUiState(
     val readingState: ReadingState?,
     /** Set only for [Blocked.LocationServicesOff], the one block a user can fix. */
     val promptLocationSettings: Boolean,
+    /** Null unless blocked — the persistent action button hosts should offer. */
+    val blockedAction: BlockedAction?,
     /** Null while the diagnostic panel is closed; nothing feeds it then. */
     val details: DetailsFacts?
 ) {
@@ -34,11 +36,32 @@ data class ElevationUiState(
         data class Value(val meters: Double) : Hero
     }
 
-    /** Why tracking cannot run. Each replaces the reading with its message. */
-    enum class Blocked(@param:StringRes val messageRes: Int) {
-        PermissionRequired(R.string.location_permission_required),
-        PreciseLocationRequired(R.string.precise_location_required),
-        LocationServicesOff(R.string.location_services_off)
+    /** The corrective action a [Blocked] state's persistent button performs. */
+    enum class BlockedAction(@param:StringRes val labelRes: Int) {
+        RequestPermission(R.string.grant_permission),
+        OpenAppSettings(R.string.open_settings),
+        OpenLocationSettings(R.string.open_location_settings)
+    }
+
+    /**
+     * Why tracking cannot run. Each replaces the reading with a sentence-style
+     * [messageRes] and offers a persistent [action] — the dialogs that first
+     * surface these reasons are dismissible, so this is the only recovery path
+     * guaranteed to still be reachable later in the session.
+     */
+    enum class Blocked(@param:StringRes val messageRes: Int, val action: BlockedAction) {
+        PermissionRequired(
+            R.string.location_permission_blocked_message, BlockedAction.RequestPermission
+        ),
+        PermissionPermanentlyDenied(
+            R.string.location_permission_denied_blocked_message, BlockedAction.OpenAppSettings
+        ),
+        PreciseLocationRequired(
+            R.string.precise_location_blocked_message, BlockedAction.RequestPermission
+        ),
+        LocationServicesOff(
+            R.string.location_services_off_blocked_message, BlockedAction.OpenLocationSettings
+        )
     }
 
     /**
@@ -51,6 +74,7 @@ data class ElevationUiState(
      */
     data class DetailsFacts(
         val isIdle: Boolean,
+        val isBlocked: Boolean,
         val location: Location?,
         val nowElapsedRealtimeNanos: Long,
         val satellitesUsed: Int,
@@ -77,6 +101,7 @@ data class ElevationUiState(
                 hero = Hero.Status(blocked.messageRes),
                 readingState = null,
                 promptLocationSettings = blocked == Blocked.LocationServicesOff,
+                blockedAction = blocked.action,
                 details = details
             )
         } else {
@@ -86,6 +111,7 @@ data class ElevationUiState(
                 ),
                 readingState = readingState,
                 promptLocationSettings = false,
+                blockedAction = null,
                 details = details
             )
         }

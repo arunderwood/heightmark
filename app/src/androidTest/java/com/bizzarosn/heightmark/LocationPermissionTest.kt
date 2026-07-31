@@ -6,12 +6,15 @@ import android.content.pm.PackageManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.Espresso.pressBack
+import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.not
 import org.junit.Assume.assumeFalse
 import org.junit.Rule
@@ -38,6 +41,9 @@ class LocationPermissionTest : HiltUiTestBase() {
     fun appWorksWithFineLocationOnly() {
         launchHome {
             onView(withId(R.id.unit_toggle_group)).check(matches(isDisplayed()))
+            // Fine location is granted, so nothing is blocked and the
+            // persistent recovery button has nothing to offer
+            onView(withId(R.id.blocked_action_button)).check(matches(not(isDisplayed())))
         }
     }
 }
@@ -72,6 +78,25 @@ class CoarseLocationPermissionTest : HiltUiTestBase() {
             onView(withText(R.string.precise_location_required))
                 .inRoot(isDialog())
                 .check(matches(isDisplayed()))
+
+            // The dialog is dismissible rather than forced (setCancelable(true));
+            // back-press is the least destructive way to refuse it — neither of
+            // its two buttons ("Grant Permission" / "Open Settings") represents
+            // "no thanks", so this is the only way to decline without acting
+            pressBack()
+
+            // Dismissal lands on the blocked screen, which explains the block
+            // and keeps the same recovery action reachable as a persistent button
+            onView(withId(R.id.elevation_text_view))
+                .check(matches(withText(R.string.precise_location_blocked_message)))
+            onView(withId(R.id.blocked_action_button))
+                .check(matches(allOf(isDisplayed(), withText(R.string.grant_permission))))
+
+            // A perform(), not just a check(), so the globally-enabled ATF pass
+            // (HiltTestRunner) validates the button's touch target and label
+            // while it's visible — tapping it directly would launch the real
+            // system permission dialog, which this test doesn't drive
+            onView(withId(R.id.button_feet)).perform(click())
         }
     }
 }
@@ -102,6 +127,8 @@ class BothLocationPermissionsTest : HiltUiTestBase() {
             onView(withId(R.id.elevation_text_view)).check(
                 matches(not(withText(R.string.precise_location_required)))
             )
+            // Nothing is blocked, so the persistent recovery button stays hidden
+            onView(withId(R.id.blocked_action_button)).check(matches(not(isDisplayed())))
         }
     }
 }
