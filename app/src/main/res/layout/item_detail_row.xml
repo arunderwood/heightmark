@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     One row of the diagnostic panel. A standalone leaf view, so each row
+     surfaces as its own accessibility node and TalkBack can navigate the
+     panel row by row instead of hearing it as one block.
+-->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="monospace"
+    android:textAppearance="?attr/textAppearanceBodySmall"
+    android:textColor="@color/hm_on_scrim_secondary" />

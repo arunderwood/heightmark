@@ -9,7 +9,10 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
@@ -44,7 +47,7 @@ class ElevationFragment : Fragment() {
     private lateinit var stabilityLine: StabilityLineView
     private lateinit var blockedActionButton: MaterialButton
     private lateinit var detailsToggle: TextView
-    private lateinit var detailsPanel: TextView
+    private lateinit var detailsPanel: ViewGroup
 
     private var useMetricUnit = true
     private var showDetails = false
@@ -77,6 +80,23 @@ class ElevationFragment : Fragment() {
         detailsToggle = view.findViewById(R.id.details_toggle)
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
+
+        // With the BottomNavigationView gone, nothing else consumes the
+        // navigation-bar inset; the scrim column now absorbs it itself so the
+        // details toggle doesn't end up under the gesture bar.
+        val contentContainer = view.findViewById<View>(R.id.content_container)
+        val initialPaddingLeft = contentContainer.paddingLeft
+        val initialPaddingRight = contentContainer.paddingRight
+        val initialPaddingBottom = contentContainer.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(contentContainer) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(
+                left = initialPaddingLeft + systemBars.left,
+                right = initialPaddingRight + systemBars.right,
+                bottom = initialPaddingBottom + systemBars.bottom
+            )
+            insets
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             useMetricUnit = preferencesRepository.useMetricUnit.first()
@@ -199,6 +219,13 @@ class ElevationFragment : Fragment() {
             .start()
     }
 
+    /**
+     * Renders each [DetailsPanelPresenter.Row] as its own child TextView,
+     * recycled across calls and updated only where the resolved text
+     * changed — so a screen reader mid-readout on an untouched row never
+     * has that row's node rewritten under it, and the 1 Hz fix-age ticker
+     * invalidates only the one row it affects.
+     */
     private fun renderDetails(facts: ElevationUiState.DetailsFacts?) {
         if (facts == null) return
         val rows = DetailsPanelPresenter.rows(
@@ -215,8 +242,20 @@ class ElevationFragment : Fragment() {
                 locale = Locale.getDefault()
             )
         )
-        detailsPanel.text = rows.joinToString("\n") { resolve(it) }
+        rows.forEachIndexed { index, row ->
+            val text = resolve(row)
+            val rowView = detailsPanel.getChildAt(index) as? TextView
+                ?: createDetailsRowView().also { detailsPanel.addView(it, index) }
+            if (rowView.text != text) rowView.text = text
+        }
+        while (detailsPanel.childCount > rows.size) {
+            detailsPanel.removeViewAt(detailsPanel.childCount - 1)
+        }
     }
+
+    private fun createDetailsRowView(): TextView =
+        LayoutInflater.from(requireContext())
+            .inflate(R.layout.item_detail_row, detailsPanel, false) as TextView
 
     /** Resolves a presenter row, flattening the one nested length resource. */
     private fun resolve(row: DetailsPanelPresenter.Row): String {
@@ -235,13 +274,20 @@ class ElevationFragment : Fragment() {
             return
         }
         if (locationOffDialog?.isShowing == true) return
+        // Every way the user can close this reports back, so the state stops
+        // asking; the dismissal in onPause deliberately does not, leaving the
+        // question standing for whenever the screen comes back
         locationOffDialog = AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.location_services_off))
             .setMessage(getString(R.string.location_services_off_message))
             .setPositiveButton(getString(R.string.open_location_settings)) { _, _ ->
+                tracker.onLocationPromptAnswered()
                 startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                tracker.onLocationPromptAnswered()
+            }
+            .setOnCancelListener { tracker.onLocationPromptAnswered() }
             .create()
         locationOffDialog?.show()
     }

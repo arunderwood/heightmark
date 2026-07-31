@@ -16,3 +16,13 @@ fun Location.verticalAccuracyOrNull(): Float? =
 /** Horizontal accuracy in meters, or null when the fix does not report one. */
 fun Location.horizontalAccuracyOrNull(): Float? =
     if (hasAccuracy()) accuracy else null
+
+/**
+ * MSL altitude accuracy in meters (API 34), or null when unavailable — either
+ * the platform is older, or [android.location.altitude.AltitudeConverter]
+ * never populated it (no geoid data, ellipsoid fallback). Unlike
+ * [verticalAccuracyOrNull], this bounds the error of the converted,
+ * sea-level number actually shown on screen, geoid model error included.
+ */
+fun Location.mslAltitudeAccuracyOrNull(): Float? =
+    if (hasMslAltitudeAccuracy()) mslAltitudeAccuracyMeters else null
