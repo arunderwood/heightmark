@@ -69,6 +69,11 @@ class StabilityLineView @JvmOverloads constructor(
     private var phase = 0f
     private var state: ReadingState = ReadingState.Acquiring
     private var animator: ValueAnimator? = null
+    private var slowFrameScheduled = false
+    // Tracks onVisibilityAggregated rather than re-deriving it, since that's
+    // the one hook that already folds in GONE, ancestor visibility, and
+    // window visibility (screen off / backgrounded) in a single callback
+    private var isVisibleAggregated = true
 
     init {
         // The initial state never passes through setState's change guard
@@ -93,10 +98,9 @@ class StabilityLineView @JvmOverloads constructor(
         }
         if (!ValueAnimator.areAnimatorsEnabled()) {
             snapToTargets()
-        } else if (isAttachedToWindow) {
-            startAnimator()
         }
         invalidate()
+        updateFramePump()
     }
 
     /** Everything the view derives from a [ReadingState], in one place. */
@@ -155,24 +159,82 @@ class StabilityLineView @JvmOverloads constructor(
         animator = null
     }
 
+    private val slowFrameTick = Runnable {
+        slowFrameScheduled = false
+        invalidate()
+    }
+
+    /** ~20 fps self-scheduled invalidation — ample for the 4 s breathing glow. */
+    private fun scheduleSlowFrame() {
+        if (slowFrameScheduled) return
+        slowFrameScheduled = true
+        postDelayed(slowFrameTick, SLOW_FRAME_INTERVAL_MS)
+    }
+
+    private fun stopSlowFrames() {
+        if (!slowFrameScheduled) return
+        slowFrameScheduled = false
+        removeCallbacks(slowFrameTick)
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (ValueAnimator.areAnimatorsEnabled() && !isAtRest()) {
-            startAnimator()
-        }
+        updateFramePump()
     }
 
     override fun onDetachedFromWindow() {
         stopAnimator()
+        stopSlowFrames()
         super.onDetachedFromWindow()
     }
 
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        isVisibleAggregated = isVisible
+        updateFramePump()
+    }
+
     /** Fully dormant and done morphing: the one state that needs no frames. */
-    private fun isAtRest(): Boolean =
-        state == ReadingState.Dormant &&
-            abs(amplitude - targetAmplitude) < EPSILON &&
-            abs(core - targetCore) < EPSILON &&
-            abs(dormantMix - targetDormantMix) < EPSILON
+    private fun isAtRest(): Boolean = state == ReadingState.Dormant && !isEasing()
+
+    /** The eased display params haven't reached this state's targets yet. */
+    private fun isEasing(): Boolean =
+        abs(amplitude - targetAmplitude) >= EPSILON ||
+            abs(core - targetCore) >= EPSILON ||
+            abs(dormantMix - targetDormantMix) >= EPSILON
+
+    /**
+     * Acquiring's traveling wave and Converging's growing core need a smooth
+     * 60-120 Hz morph; so does any in-flight ease toward a new target,
+     * regardless of which state it's easing into. Everything else — chiefly
+     * Stable's slow breathing glow, which reads its own alpha off the system
+     * clock rather than off [phase] — only needs occasional redraws.
+     */
+    private fun needsFullRate(): Boolean =
+        state == ReadingState.Acquiring || state is ReadingState.Converging || isEasing()
+
+    /** The single place deciding which frame pump (if any) should be running. */
+    private fun updateFramePump() {
+        if (!isAttachedToWindow || !isVisibleAggregated || !ValueAnimator.areAnimatorsEnabled()) {
+            stopAnimator()
+            stopSlowFrames()
+            return
+        }
+        when {
+            isAtRest() -> {
+                stopAnimator()
+                stopSlowFrames()
+            }
+            needsFullRate() -> {
+                stopSlowFrames()
+                startAnimator()
+            }
+            else -> {
+                stopAnimator()
+                scheduleSlowFrame()
+            }
+        }
+    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -225,8 +287,8 @@ class StabilityLineView @JvmOverloads constructor(
 
         if (isAtRest()) {
             snapToTargets()
-            stopAnimator()
         }
+        updateFramePump()
     }
 
     private fun strokePaint(widthPx: Float, dash: DashPathEffect? = null) =
@@ -267,6 +329,7 @@ class StabilityLineView @JvmOverloads constructor(
         private const val EPSILON = 0.005f
         private const val WAVE_PERIOD_MS = 1_400L
         private const val BREATH_PERIOD_MS = 4_000L
+        private const val SLOW_FRAME_INTERVAL_MS = 50L
         // The wave and dormant strokes carry meaning, so they must clear the
         // 3:1 non-text contrast minimum over the day-mode scrim floor;
         // ScrimContrastTest references these constants directly. The glow is
