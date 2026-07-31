@@ -4,71 +4,33 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     
-    <!-- Background circle with padding for adaptive icon -->
-    <path
-        android:pathData="M54,20 A34,34 0 1,1 54,88 A34,34 0 1,1 54,20 Z"
-        android:fillColor="#E8F5E8"
-        android:strokeColor="#4CAF50"
-        android:strokeWidth="1.5"/>
-    
     <!-- Back mountain layer -->
     <path
         android:pathData="M26,66 L34,52 L42,60 L50,46 L58,54 L66,66 L66,76 L26,76 Z"
-        android:fillColor="#A5D6A7"
-        android:fillAlpha="0.6"/>
-    
+        android:fillColor="#D4E8D0"
+        android:fillAlpha="0.7"/>
+
     <!-- Middle mountain layer -->
     <path
         android:pathData="M30,70 L38,56 L46,66 L54,50 L62,58 L62,76 L30,76 Z"
-        android:fillColor="#66BB6A"
-        android:fillAlpha="0.8"/>
-    
+        android:fillColor="#516350"
+        android:fillAlpha="0.85"/>
+
     <!-- Main peak -->
     <path
         android:pathData="M36,74 L54,38 L72,74 L72,76 L36,76 Z"
-        android:fillColor="#4CAF50"/>
-    
+        android:fillColor="#38693C"/>
+
     <!-- Peak highlight -->
     <path
         android:pathData="M36,74 L54,38 L63,59 L45,74 Z"
-        android:fillColor="#81C784"/>
-    
+        android:fillColor="#B9F0B8"/>
+
     <!-- GPS location marker at peak -->
     <path
         android:pathData="M54,37.5 A2.5,2.5 0 1,1 54,42.5 A2.5,2.5 0 1,1 54,37.5 Z"
-        android:fillColor="#FF5722"/>
+        android:fillColor="#39656B"/>
     <path
         android:pathData="M54,38.5 A1.5,1.5 0 1,1 54,41.5 A1.5,1.5 0 1,1 54,38.5 Z"
         android:fillColor="#FFFFFF"/>
-    
-    <!-- Elevation measurement lines -->
-    <path
-        android:pathData="M70,74 L78,74"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"/>
-    <path
-        android:pathData="M70,58 L76,58"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"/>
-    <path
-        android:pathData="M70,40 L74,40"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"/>
-    
-    <!-- Vertical measurement line -->
-    <path
-        android:pathData="M71,40 L71,74"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"/>
-    
-    <!-- Height indicator arrow -->
-    <path
-        android:pathData="M68,40 L70,40"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"/>
-    <path
-        android:pathData="M69,38 L70,40 L69,42"
-        android:strokeColor="#1976D2"
-        android:strokeWidth="1"
-        android:fillColor="#00000000"/>
 </vector>
