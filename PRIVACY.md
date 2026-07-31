@@ -1,74 +1,73 @@
-**Privacy Policy**
+# HeightMark Privacy Policy
 
-This privacy policy applies to the Heightsnap app (hereby referred to as "Application") for mobile devices that was created by (hereby referred to as "Service Provider") as an Open Source service. This service is intended for use "AS IS".
+**Last updated: 2026-07-30**
 
-**Information Collection and Use**
+This policy covers the HeightMark Android app (package `com.bizzarosn.heightmark`), published by its maintainer. The app's source code is public at
+[github.com/arunderwood/heightmark](https://github.com/arunderwood/heightmark), so every claim below can be checked against the code.
 
-The Application collects information when you download and use it. This information may include information such as
+## Summary
 
-*   Your device's Internet Protocol address (e.g. IP address)
-*   The pages of the Application that you visit, the time and date of your visit, the time spent on those pages
-*   The time spent on the Application
-*   The operating system you use on your mobile device
+HeightMark reads your device's precise GPS location for one purpose: to compute the elevation shown on screen. That location data stays on your device. It is not stored, not uploaded, and not shared. The app has no analytics, no advertising, no crash-reporting service, no third-party SDKs, and no Google Play services dependency.
 
-The Application does not gather precise information about the location of your mobile device.
+The app does not request the `INTERNET` permission, so it cannot make network connections at all.
 
-The Application collects your device's location, which helps the Service Provider determine your approximate geographical location and make use of in below ways:
+## What the app accesses
 
-*   Geolocation Services: The Service Provider utilizes location data to provide features such as personalized content, relevant recommendations, and location-based services.
-*   Analytics and Improvements: Aggregated and anonymized location data helps the Service Provider to analyze user behavior, identify trends, and improve the overall performance and functionality of the Application.
-*   Third-Party Services: Periodically, the Service Provider may transmit anonymized location data to external services. These services assist them in enhancing the Application and optimizing their offerings.
+- **Precise location** (`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`). Elevation comes from GNSS altitude, which requires precise location — a coarse or "approximate" grant is not enough, and the app will ask you to upgrade it. Fixes come from the Android `LocationManager`'s GPS provider, plus the passive provider, which lets HeightMark reuse a fix another app already requested instead of powering the GPS radio itself.
+- **Motion and pressure sensors.** While the GPS radio is duty-cycled off to save power, the significant-motion sensor and the barometer are used to detect that you have moved and that a fresh fix is warranted. Barometric pressure is also shown in the optional Details panel.
 
-The Service Provider may use the information you provided to contact you from time to time to provide you with important information, required notices and marketing promotions.
+## How location is used
 
-For a better experience, while using the Application, the Service Provider may require you to provide us with certain personally identifiable information. The information that the Service Provider request will be retained by them and used as described in this privacy policy.
+Each GPS fix is converted from WGS84 ellipsoid height to elevation above Mean Sea Level using Android's built-in `AltitudeConverter`, which uses geoid data stored on the device and works entirely offline. Fixes are averaged over a short rolling window to steady the displayed number.
 
-**Third Party Access**
+All of this happens in memory, in the app process. Position data is never written to a file, database, or preference store. When the app process ends, the readings are gone.
 
-Only aggregated, anonymized data is periodically transmitted to external services to aid the Service Provider in improving the Application and their service. The Service Provider may share your information with third parties in the ways that are described in this privacy statement.
+If you turn on the optional **Details** panel, it displays diagnostics about the current fix — including your latitude and longitude, accuracy figures, satellite counts, and barometric pressure. That information is rendered on your screen and nowhere else.
 
-Please note that the Application utilizes third-party services that have their own Privacy Policy about handling data. Below are the links to the Privacy Policy of the third-party service providers used by the Application:
+## What leaves your device
 
-*   [Google Play Services](https://www.google.com/policies/privacy/)
+Nothing.
 
-The Service Provider may disclose User Provided and Automatically Collected Information:
+HeightMark declares no `INTERNET` permission and contains no networking code, no analytics library, no advertising library, and no crash-reporting library. Its entire dependency list is AndroidX, Google's Material Components, Hilt (dependency injection), and Jetpack DataStore — none of which transmit your data. The app deliberately avoids Google Play services so that it behaves identically on standard Android and on de-googled builds such as GrapheneOS, LineageOS, CalyxOS, and /e/OS.
 
-*   as required by law, such as to comply with a subpoena, or similar legal process;
-*   when they believe in good faith that disclosure is necessary to protect their rights, protect your safety or the safety of others, investigate fraud, or respond to a government request;
-*   with their trusted services providers who work on their behalf, do not have an independent use of the information we disclose to them, and have agreed to adhere to the rules set forth in this privacy statement.
+There are no user accounts, no sign-in, and no way to contact you through the app.
 
-**Opt-Out Rights**
+## What is stored on your device
 
-You can stop all collection of information by the Application easily by uninstalling it. You may use the standard uninstall processes as may be available as part of your mobile device or via the mobile application marketplace or network.
+Exactly two settings, saved locally through Jetpack DataStore:
 
-**Data Retention Policy**
+- your unit preference (metric or imperial), and
+- whether the Details panel is shown.
 
-The Service Provider will retain User Provided data for as long as you use the Application and for a reasonable time thereafter. If you'd like them to delete User Provided Data that you have provided via the Application, please contact them at and they will respond in a reasonable time.
+That is the complete list. No location, no history, no identifiers.
 
-**Children**
+## Backup
 
-The Service Provider does not use the Application to knowingly solicit data from or market to children under the age of 13.
+HeightMark participates in standard Android backup. The settings file described above (`datastore/settings.preferences_pb`) is included in both cloud backup and device-to-device transfer — see [`app/src/main/res/xml/data_extraction_rules.xml`](app/src/main/res/xml/data_extraction_rules.xml).
 
-The Application does not address anyone under the age of 13\. The Service Provider does not knowingly collect personally identifiable information from children under 13 years of age. In the case the Service Provider discover that a child under 13 has provided personal information, the Service Provider will immediately delete this from their servers. If you are a parent or guardian and you are aware that your child has provided us with personal information, please contact the Service Provider () so that they will be able to take the necessary actions.
+In practice this means that if you have Android's backup feature enabled, those two preference values may be copied to your own backup — for most users, their Google account — and restored when you set up a new device. That backup is handled by Android and governed by your device's backup settings and your backup provider's privacy policy, not by HeightMark. No location data is in that file, because the app never stores any.
 
-**Security**
+## Third parties
 
-The Service Provider is concerned about safeguarding the confidentiality of your information. The Service Provider provides physical, electronic, and procedural safeguards to protect information the Service Provider processes and maintains.
+HeightMark integrates no third-party services and sends data to no one.
 
-**Changes**
+The app itself contains no crash-reporting code. Separately, if you installed it from the Google Play Store, that store is Google's service and is covered by Google's privacy policy; any crash or performance data Android itself reports to a developer console is controlled by your device's diagnostics settings, not by anything in the app.
 
-This Privacy Policy may be updated from time to time for any reason. The Service Provider will notify you of any changes to the Privacy Policy by updating this page with the new Privacy Policy. You are advised to consult this Privacy Policy regularly for any changes, as continued use is deemed approval of all changes.
+## Children
 
-This privacy policy is effective as of 2025-09-30
+HeightMark collects no personal information from anyone, of any age. There is nothing to solicit, transmit, or delete on a server, because there is no server.
 
-**Your Consent**
+## Removing your data
 
-By using the Application, you are consenting to the processing of your information as set forth in this Privacy Policy now and as amended by us.
+Uninstalling the app removes its local settings from your device. If Android backup is enabled, a copy of those settings may persist in your backup until your backup provider removes it under its own retention rules; you can delete app backup data through your device's backup settings.
 
-**Contact Us**
+There is no other data to remove, and no request to send anyone — the maintainer has no copy of anything.
 
-If you have any questions regarding privacy while using the Application, or have questions about the practices, please contact the Service Provider via email at .
+## Changes to this policy
 
-* * *
+If this policy changes, the updated version will be published in the app's repository, with the change visible in the commit history.
 
-This privacy policy page was generated by [App Privacy Policy Generator](https://app-privacy-policy-generator.nisrulz.com/)
+## Contact
+
+Questions about privacy in HeightMark go to the project's issue tracker:
+[github.com/arunderwood/heightmark/issues](https://github.com/arunderwood/heightmark/issues)
