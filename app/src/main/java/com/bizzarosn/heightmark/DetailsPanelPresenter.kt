@@ -77,8 +77,10 @@ object DetailsPanelPresenter {
             rows += Row(
                 R.string.detail_fix_age,
                 listOf(
-                    (input.nowElapsedRealtimeNanos - location.elapsedRealtimeNanos) /
-                        NANOS_PER_SECOND
+                    fixAgeSeconds(
+                        (input.nowElapsedRealtimeNanos - location.elapsedRealtimeNanos) /
+                            NANOS_PER_SECOND
+                    )
                 )
             )
         }
@@ -107,7 +109,23 @@ object DetailsPanelPresenter {
     private fun Double.fmt(locale: Locale, decimals: Int): String =
         String.format(locale, "%.${decimals}f", this)
 
+    /**
+     * Below [FIX_AGE_COARSEN_THRESHOLD_S] the exact second is reported; beyond
+     * it the value snaps to [FIX_AGE_STEP_S]-second steps. A 1 Hz ticker keeps
+     * this row's fix age moving, so an unthrottled value would rewrite the
+     * row's accessibility node every second, permanently interrupting anyone
+     * reading it with a screen reader.
+     */
+    private fun fixAgeSeconds(exactSeconds: Long): Long =
+        if (exactSeconds < FIX_AGE_COARSEN_THRESHOLD_S) {
+            exactSeconds
+        } else {
+            (exactSeconds / FIX_AGE_STEP_S) * FIX_AGE_STEP_S
+        }
+
     private const val NANOS_PER_SECOND = 1_000_000_000
     private const val POSITION_DECIMALS = 5
     private const val PRESSURE_DECIMALS = 1
+    private const val FIX_AGE_COARSEN_THRESHOLD_S = 10L
+    private const val FIX_AGE_STEP_S = 10L
 }

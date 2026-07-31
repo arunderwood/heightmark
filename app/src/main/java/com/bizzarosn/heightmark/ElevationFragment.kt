@@ -42,7 +42,7 @@ class ElevationFragment : Fragment() {
     private lateinit var elevationTextView: TextView
     private lateinit var stabilityLine: StabilityLineView
     private lateinit var detailsToggle: TextView
-    private lateinit var detailsPanel: TextView
+    private lateinit var detailsPanel: ViewGroup
 
     private var useMetricUnit = true
     private var showDetails = false
@@ -192,6 +192,13 @@ class ElevationFragment : Fragment() {
             .start()
     }
 
+    /**
+     * Renders each [DetailsPanelPresenter.Row] as its own child TextView,
+     * recycled across calls and updated only where the resolved text
+     * changed — so a screen reader mid-readout on an untouched row never
+     * has that row's node rewritten under it, and the 1 Hz fix-age ticker
+     * invalidates only the one row it affects.
+     */
     private fun renderDetails(facts: ElevationUiState.DetailsFacts?) {
         if (facts == null) return
         val rows = DetailsPanelPresenter.rows(
@@ -207,8 +214,20 @@ class ElevationFragment : Fragment() {
                 locale = Locale.getDefault()
             )
         )
-        detailsPanel.text = rows.joinToString("\n") { resolve(it) }
+        rows.forEachIndexed { index, row ->
+            val text = resolve(row)
+            val rowView = detailsPanel.getChildAt(index) as? TextView
+                ?: createDetailsRowView().also { detailsPanel.addView(it, index) }
+            if (rowView.text != text) rowView.text = text
+        }
+        while (detailsPanel.childCount > rows.size) {
+            detailsPanel.removeViewAt(detailsPanel.childCount - 1)
+        }
     }
+
+    private fun createDetailsRowView(): TextView =
+        LayoutInflater.from(requireContext())
+            .inflate(R.layout.item_detail_row, detailsPanel, false) as TextView
 
     /** Resolves a presenter row, flattening the one nested length resource. */
     private fun resolve(row: DetailsPanelPresenter.Row): String {
