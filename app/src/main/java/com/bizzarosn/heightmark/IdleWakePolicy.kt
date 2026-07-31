@@ -20,7 +20,7 @@ import kotlin.math.abs
  * trigger. Tuned to lean toward the cheaper mistake — reject the fix, not
  * the movement.
  */
-object IdleWakePolicy {
+internal object IdleWakePolicy {
 
     /** True if [location] shows movement from [anchor] worth waking the GPS radio for. */
     fun shouldWake(anchor: Location, location: Location): Boolean =
