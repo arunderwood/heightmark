@@ -2,7 +2,7 @@
 
 **Last updated: 2026-07-30**
 
-This policy covers the HeightMark Android app (package `com.bizzarosn.heightmark`), published by its maintainer. The app's source code is public at
+This policy covers the HeightMark Android app (package `com.bizzarosn.heightmark`), published by its maintainer. HeightMark is open source under the MIT license, and its complete source is at
 [github.com/arunderwood/heightmark](https://github.com/arunderwood/heightmark), so every claim below can be checked against the code.
 
 ## Summary
