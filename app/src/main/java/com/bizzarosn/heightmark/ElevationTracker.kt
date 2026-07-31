@@ -227,8 +227,12 @@ class ElevationTracker @Inject constructor(
             val elevation = withContext(Dispatchers.IO) {
                 altitudeResolver.mslAltitudeMeters(location)
             }
+            // The conversion may have populated a tighter, post-conversion
+            // accuracy bound on the same Location; prefer it over the
+            // pre-conversion figure session.offer() captured
+            val accuracy = location.mslAltitudeAccuracyOrNull() ?: pending.verticalAccuracyMeters
             // The window was flushed while this fix was converting: drop it
-            if (!session.commit(pending, elevation)) return@launch
+            if (!session.commit(pending, elevation, accuracy)) return@launch
             lastLocation = location
             publish()
         }

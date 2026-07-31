@@ -117,7 +117,7 @@ class StabilityLineView @JvmOverloads constructor(
             spokenRes = R.string.stability_acquiring
         )
         is ReadingState.Converging -> {
-            val p = state.progress.coerceIn(0f, 1f)
+            val p = state.visualProgress
             StatePresentation(
                 amplitude = 1f - p, core = p, dormantMix = 0f,
                 spokenRes = R.string.stability_converging

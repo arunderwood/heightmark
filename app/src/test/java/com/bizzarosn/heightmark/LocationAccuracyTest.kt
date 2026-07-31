@@ -40,4 +40,18 @@ class LocationAccuracyTest {
 
         assertEquals(0f, reported.verticalAccuracyOrNull()!!, 0.001f)
     }
+
+    @Test
+    fun `MSL altitude accuracy is null when the fix does not report one`() {
+        val location = TestLocations.detailsFix(mslAltitudeAccuracy = null)
+
+        assertNull(location.mslAltitudeAccuracyOrNull())
+    }
+
+    @Test
+    fun `MSL altitude accuracy is returned when the fix reports one`() {
+        val location = TestLocations.detailsFix(mslAltitudeAccuracy = 2.5f)
+
+        assertEquals(2.5f, location.mslAltitudeAccuracyOrNull()!!, 0.001f)
+    }
 }

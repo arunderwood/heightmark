@@ -63,7 +63,12 @@ object DetailsPanelPresenter {
             rows += Row(
                 R.string.detail_accuracy,
                 listOf(
-                    input.lengthOrUnknown(location.verticalAccuracyOrNull()),
+                    // MSL accuracy bounds the number actually on screen (geoid
+                    // model error included); the raw ellipsoidal figure is a
+                    // fallback for when the platform or a fix doesn't have it.
+                    input.lengthOrUnknown(
+                        location.mslAltitudeAccuracyOrNull() ?: location.verticalAccuracyOrNull()
+                    ),
                     input.lengthOrUnknown(location.horizontalAccuracyOrNull())
                 )
             )

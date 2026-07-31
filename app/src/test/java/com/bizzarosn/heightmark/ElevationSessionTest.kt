@@ -69,6 +69,31 @@ class ElevationSessionTest {
     }
 
     @Test
+    fun `commit's accuracy override supersedes the pre-conversion accuracy for weighting`() {
+        val first = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        session.commit(first, 100.0, accuracyMeters = 10f)
+
+        val second = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        // A resolved accuracy far tighter than what admission captured (e.g. a
+        // post-conversion MSL figure) should dominate the weighted average
+        session.commit(second, 106.0, accuracyMeters = 1f)
+
+        // weight(10 m) = 0.01, weight(1 m) = 1: (100 x 0.01 + 106 x 1) / 1.01
+        assertEquals(105.941, session.displayedElevationMeters!!, 0.001)
+    }
+
+    @Test
+    fun `commit without an override weighs by the fix's pre-conversion accuracy`() {
+        val loose = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 10f))!!
+        session.commit(loose, 100.0)
+
+        val tight = session.offer(TestLocations.fixForAdmission(verticalAccuracy = 1f))!!
+        session.commit(tight, 106.0)
+
+        assertEquals(105.941, session.displayedElevationMeters!!, 0.001)
+    }
+
+    @Test
     fun `a fix converted across a wake is dropped`() {
         addReading(100.0)
         val pending = session.offer(TestLocations.fixForAdmission())!!
