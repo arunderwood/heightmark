@@ -293,6 +293,46 @@ class ElevationSessionTest {
         assertEquals(1, session.readingCount)
     }
 
+    // ---- Datum recovery after a background gap ----
+
+    @Test
+    fun `ellipsoid fixes after a background-gap reset build a consistent window`() {
+        addReading(100.0)
+        session.onPaused(0L)
+        session.onResumed(RESET_AFTER_GAP_MS + 1)
+
+        // Geoid conversion never comes back this time, so the window that
+        // used to be refused now has to carry the reading on its own datum
+        assertTrue(addReading(50.0, datum = ELLIPSOID))
+        assertTrue(addReading(52.0, datum = ELLIPSOID))
+
+        assertEquals(2, session.readingCount)
+        assertEquals(Elevation(51.0, ELLIPSOID), session.displayedElevation)
+    }
+
+    @Test
+    fun `an MSL fix after a background-gap reset re-latches the datum`() {
+        addReading(100.0)
+        session.onPaused(0L)
+        session.onResumed(RESET_AFTER_GAP_MS + 1)
+
+        assertTrue(addReading(70.0))
+        assertFalse(addReading(50.0, datum = ELLIPSOID))
+
+        assertEquals(1, session.readingCount)
+        assertEquals(Elevation(70.0, MEAN_SEA_LEVEL), session.displayedElevation)
+    }
+
+    @Test
+    fun `waking does not clear the datum latch`() {
+        addReading(100.0)
+        session.wake()
+
+        assertFalse(addReading(50.0, datum = ELLIPSOID))
+        assertEquals(0, session.readingCount)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
     // ---- Fix-age watchdog ----
 
     @Test

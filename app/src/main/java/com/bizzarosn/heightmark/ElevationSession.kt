@@ -172,12 +172,17 @@ class ElevationSession @Inject constructor(
     /**
      * Screen foregrounded at [nowElapsedRealtimeMs]. A long gap away from the
      * app can mean a whole new elevation, so the average starts over rather
-     * than walking the stale window there.
+     * than walking the stale window there. The same gap re-opens the datum
+     * question: [hasSeaLevelFix] only clears here, not in [wake]'s frequent
+     * duty-cycle flushes, so a permanently broken geoid conversion can still
+     * recover into the labeled ellipsoid mode instead of dropping fixes
+     * forever.
      */
     fun onResumed(nowElapsedRealtimeMs: Long) {
         val pausedAt = pausedAtElapsedMs ?: return
         if (nowElapsedRealtimeMs - pausedAt > RESET_AFTER_GAP_MS) {
             flush()
+            hasSeaLevelFix = false
         }
     }
 
