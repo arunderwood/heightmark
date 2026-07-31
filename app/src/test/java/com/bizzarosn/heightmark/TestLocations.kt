@@ -25,6 +25,7 @@ object TestLocations {
         msl: Double? = null,
         verticalAccuracy: Float? = null,
         horizontalAccuracy: Float? = null,
+        mslAltitudeAccuracy: Float? = null,
         latitude: Double = 0.0,
         longitude: Double = 0.0,
         atNanos: Long = 0L
@@ -34,6 +35,8 @@ object TestLocations {
         verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
         every { location.hasAccuracy() } returns (horizontalAccuracy != null)
         horizontalAccuracy?.let { every { location.accuracy } returns it }
+        every { location.hasMslAltitudeAccuracy() } returns (mslAltitudeAccuracy != null)
+        mslAltitudeAccuracy?.let { every { location.mslAltitudeAccuracyMeters } returns it }
         every { location.latitude } returns latitude
         every { location.longitude } returns longitude
         every { location.elapsedRealtimeNanos } returns atNanos

@@ -136,6 +136,26 @@ class DetailsPanelPresenterTest {
     }
 
     @Test
+    fun `the accuracy row prefers MSL altitude accuracy over ellipsoidal vertical accuracy`() {
+        val location = TestLocations.detailsFix(verticalAccuracy = 8f, mslAltitudeAccuracy = 2.5f)
+
+        val accuracy = DetailsPanelPresenter.rows(input(location = location))
+            .first { it.templateRes == R.string.detail_accuracy }
+
+        assertEquals(listOf(meters("2.5"), UNKNOWN_VALUE), accuracy.args)
+    }
+
+    @Test
+    fun `the accuracy row falls back to vertical accuracy without an MSL figure`() {
+        val location = TestLocations.detailsFix(verticalAccuracy = 8f, mslAltitudeAccuracy = null)
+
+        val accuracy = DetailsPanelPresenter.rows(input(location = location))
+            .first { it.templateRes == R.string.detail_accuracy }
+
+        assertEquals(listOf(meters("8.0"), UNKNOWN_VALUE), accuracy.args)
+    }
+
+    @Test
     fun `the pressure row is omitted on a barometer-less device`() {
         val rows = DetailsPanelPresenter.rows(input(pressureHpa = null))
 
