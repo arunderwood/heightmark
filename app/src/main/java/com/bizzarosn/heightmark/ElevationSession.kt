@@ -80,8 +80,18 @@ class ElevationSession @Inject constructor(
      * Adds a converted fix to the average, unless its window was flushed while
      * it was converting or its datum does not belong there. Returns true when
      * the reading was applied and the screen needs a repaint.
+     *
+     * [accuracyMeters] weighs the reading in the average and feeds the settle
+     * threshold; it defaults to the fix's pre-conversion vertical accuracy but
+     * callers that resolved a tighter bound afterward — the MSL altitude
+     * accuracy the geoid conversion can populate — should pass that instead,
+     * since it is what actually bounds the committed elevation.
      */
-    fun commit(pending: PendingFix, elevation: Elevation): Boolean {
+    fun commit(
+        pending: PendingFix,
+        elevation: Elevation,
+        accuracyMeters: Float? = pending.verticalAccuracyMeters
+    ): Boolean {
         if (pending.epoch != epoch) return false
         if (!admits(elevation.datum)) return false
         // Geoid data that only becomes available mid-session shifts every
@@ -93,7 +103,7 @@ class ElevationSession @Inject constructor(
         }
         displayedElevation = Elevation(
             elevationService
-                .addElevationReading(elevation.meters, pending.verticalAccuracyMeters)
+                .addElevationReading(elevation.meters, accuracyMeters)
                 .averageMeters,
             elevation.datum
         )

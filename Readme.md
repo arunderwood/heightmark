@@ -12,3 +12,11 @@ This Android app is a simple way to be able to glance at current elevation.  It'
 - Readings are averaged over a rolling window, with poor-vertical-accuracy fixes filtered out.
 - The GPS radio duty-cycles: after ~30 s stationary it turns off, and low-power triggers (significant-motion sensor for horizontal movement, barometer for elevators and other vertical movement, passive fixes from other apps) turn it back on.
 - A "Details" panel shows the nerd data: ellipsoid vs sea-level altitude, geoid offset, accuracy, satellites in view, barometric pressure, and GPS duty-cycle state.
+
+## Privacy
+
+Location never leaves your device. The app declares no `INTERNET` permission, so it cannot make network requests at all — there are no analytics, no ads, and no third-party services. See [PRIVACY.md](PRIVACY.md).
+
+## License
+
+[MIT](LICENSE)
