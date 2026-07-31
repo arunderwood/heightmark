@@ -23,7 +23,7 @@ class ReadingStateTest {
             ReadingState.Acquiring,
             ReadingState.derive(
                 hasFixEver = false, isIdle = true, awaitingFreshFix = true,
-                snapshot = snapshot(settled = true)
+                signalStale = true, snapshot = snapshot(settled = true)
             )
         )
     }
@@ -34,7 +34,7 @@ class ReadingStateTest {
             ReadingState.Dormant,
             ReadingState.derive(
                 hasFixEver = true, isIdle = true, awaitingFreshFix = false,
-                snapshot = snapshot(readingCount = 10, settled = true)
+                signalStale = false, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -45,7 +45,18 @@ class ReadingStateTest {
             ReadingState.Dormant,
             ReadingState.derive(
                 hasFixEver = true, isIdle = false, awaitingFreshFix = true,
-                snapshot = snapshot(readingCount = 0)
+                signalStale = false, snapshot = snapshot(readingCount = 0)
+            )
+        )
+    }
+
+    @Test
+    fun `a stale signal forces dormant`() {
+        assertEquals(
+            ReadingState.Dormant,
+            ReadingState.derive(
+                hasFixEver = true, isIdle = false, awaitingFreshFix = false,
+                signalStale = true, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -56,7 +67,7 @@ class ReadingStateTest {
             ReadingState.Stable,
             ReadingState.derive(
                 hasFixEver = true, isIdle = false, awaitingFreshFix = false,
-                snapshot = snapshot(readingCount = 10, settled = true)
+                signalStale = false, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -65,7 +76,7 @@ class ReadingStateTest {
     fun `unsettled window is converging with the fill progress`() {
         val state = ReadingState.derive(
             hasFixEver = true, isIdle = false, awaitingFreshFix = false,
-            snapshot = snapshot(readingCount = 3)
+            signalStale = false, snapshot = snapshot(readingCount = 3)
         )
         assertEquals(ReadingState.Converging(0.3f), state)
     }

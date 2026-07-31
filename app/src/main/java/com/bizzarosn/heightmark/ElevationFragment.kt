@@ -245,6 +245,7 @@ class ElevationFragment : Fragment() {
             DetailsPanelPresenter.Input(
                 isIdle = facts.isIdle,
                 isBlocked = facts.isBlocked,
+                signalStale = facts.signalStale,
                 location = facts.location,
                 nowElapsedRealtimeNanos = facts.nowElapsedRealtimeNanos,
                 satellitesUsed = facts.satellitesUsed,

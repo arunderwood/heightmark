@@ -16,6 +16,7 @@ class DetailsPanelPresenterTest {
     private fun input(
         isIdle: Boolean = false,
         isBlocked: Boolean = false,
+        signalStale: Boolean = false,
         location: android.location.Location? = null,
         nowNanos: Long = 0L,
         satellitesUsed: Int = 0,
@@ -27,6 +28,7 @@ class DetailsPanelPresenterTest {
     ) = Input(
         isIdle = isIdle,
         isBlocked = isBlocked,
+        signalStale = signalStale,
         location = location,
         nowElapsedRealtimeNanos = nowNanos,
         satellitesUsed = satellitesUsed,
@@ -216,6 +218,20 @@ class DetailsPanelPresenterTest {
     @Test
     fun `idle state swaps the leading row`() {
         val rows = DetailsPanelPresenter.rows(input(isIdle = true))
+
+        assertEquals(Row(R.string.detail_state_idle), rows.first())
+    }
+
+    @Test
+    fun `a stale signal swaps the leading row`() {
+        val rows = DetailsPanelPresenter.rows(input(signalStale = true))
+
+        assertEquals(Row(R.string.detail_state_no_signal), rows.first())
+    }
+
+    @Test
+    fun `idle outranks a stale signal in the leading row`() {
+        val rows = DetailsPanelPresenter.rows(input(isIdle = true, signalStale = true))
 
         assertEquals(Row(R.string.detail_state_idle), rows.first())
     }

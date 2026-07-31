@@ -42,6 +42,17 @@ class ElevationSession @Inject constructor(
         private set
 
     /**
+     * True once [ElevationTracker]'s fix-age watchdog has gone off: tracking
+     * is still active but no fix has committed recently enough to trust the
+     * displayed reading. Distinct from [awaitingFreshFix] — a watchdog expiry
+     * does not discard the averaging window, since the outage is usually
+     * brief (elevator lobby, parking garage) and the same reading is still
+     * likely right once fixes resume.
+     */
+    var signalStale: Boolean = false
+        private set
+
+    /**
      * The last elevation committed and the datum it was measured against, kept
      * across a flush so the hero number can stay on screen — dimmed by
      * [ReadingState.Dormant] — until fresh fixes land. Null until the first fix.
@@ -110,6 +121,7 @@ class ElevationSession @Inject constructor(
         hasFix = true
         if (elevation.datum == ElevationDatum.MEAN_SEA_LEVEL) hasSeaLevelFix = true
         awaitingFreshFix = false
+        signalStale = false
         return true
     }
 
@@ -132,6 +144,17 @@ class ElevationSession @Inject constructor(
     /** The GPS radio went off for the stationary duty cycle. */
     fun enterIdle() {
         isIdle = true
+    }
+
+    /**
+     * The fix-age watchdog expired: tracking is active but no fix has
+     * committed recently enough to trust the displayed reading. A no-op
+     * before the first fix, where [ReadingState.Acquiring] already covers it,
+     * and while idle, where the radio is off on purpose and a fix drought is
+     * the expected condition rather than a lost signal.
+     */
+    fun onFixWatchdogExpired() {
+        if (hasFix && !isIdle) signalStale = true
     }
 
     /** A wake fired: the device moved, so the window is stale. */
@@ -163,6 +186,7 @@ class ElevationSession @Inject constructor(
         hasFixEver = hasFix,
         isIdle = isIdle,
         awaitingFreshFix = awaitingFreshFix,
+        signalStale = signalStale,
         snapshot = elevationService.snapshot()
     )
 

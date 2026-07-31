@@ -36,6 +36,7 @@ class ElevationUiStateTest {
     ) = ElevationUiState.DetailsFacts(
         isIdle = false,
         isBlocked = isBlocked,
+        signalStale = false,
         location = null,
         nowElapsedRealtimeNanos = nowElapsedRealtimeNanos,
         satellitesUsed = 3,

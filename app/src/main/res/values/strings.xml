@@ -64,6 +64,7 @@
     <string name="detail_state_tracking">GPS: tracking</string>
     <string name="detail_state_idle">GPS: idle (stationary)</string>
     <string name="detail_state_blocked">GPS: off</string>
+    <string name="detail_state_no_signal">GPS: no signal</string>
     <string name="detail_no_fix">Waiting for first fix…</string>
     <string name="value_meters">%1$s m</string>
     <string name="value_feet">%1$s ft</string>
