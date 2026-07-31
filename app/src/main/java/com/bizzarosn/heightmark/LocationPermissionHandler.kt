@@ -33,6 +33,16 @@ sealed class LocationPermissionState {
     object CoarseOnly : LocationPermissionState()
     object PermanentlyDenied : LocationPermissionState()
     object RequiresRationale : LocationPermissionState()
+
+    /**
+     * A true first launch: this install has never triggered the system
+     * permission dialog. Renders the same blocked screen as
+     * [RequiresRationale] — its message is the up-front rationale Android's
+     * guidance calls for — but the caller must not pair it with either
+     * dialog, since firing one here is exactly the no-context prompt this
+     * state exists to avoid.
+     */
+    object NotYetRequested : LocationPermissionState()
 }
 
 class LocationPermissionHandler(
@@ -42,7 +52,14 @@ class LocationPermissionHandler(
      *  caller backs this with session-scoped state, since this handler is
      *  rebuilt on every fragment recreation and cannot hold it itself. */
     private val hasShownUpgradeDialog: () -> Boolean,
-    private val onUpgradeDialogShown: () -> Unit
+    private val onUpgradeDialogShown: () -> Unit,
+    /** Whether the system dialog has ever been triggered for this install —
+     *  the seam [checkPermission] uses to tell a true first launch apart
+     *  from a returning, already-decided user. The caller backs this with
+     *  persisted state (survives process death, unlike [hasShownUpgradeDialog]),
+     *  since a killed-and-relaunched process must not re-ask. */
+    private val hasRequestedPermissionBefore: () -> Boolean,
+    private val onPermissionRequested: () -> Unit
 ) : DefaultLifecycleObserver {
 
     private var locationPermissionLauncher: ActivityResultLauncher<Array<String>>? = null
@@ -74,7 +91,8 @@ class LocationPermissionHandler(
                 fineGranted = hasFinePermission(),
                 anyGranted = hasLocationPermission(),
                 shouldShowRationale = shouldShowRationale(),
-                isRequestResult = false
+                isRequestResult = false,
+                hasRequestedBefore = hasRequestedPermissionBefore()
             )
         )
     }
@@ -100,16 +118,25 @@ class LocationPermissionHandler(
     /** Launches the system permission request. Also the blocked screen's
      *  persistent-action entry point for [ElevationUiState.BlockedAction.RequestPermission]. */
     fun requestPermissions() {
+        // The single choke point every request path funnels through — the
+        // auto-fire fallback, each dialog's positive button, and the blocked
+        // screen's own button — so "requested at least once" is recorded
+        // regardless of which of them the user reached it from.
+        onPermissionRequested()
         locationPermissionLauncher?.launch(permissions)
     }
-    
+
     private fun handlePermissionResult(permissions: Map<String, Boolean>) {
         applyResolution(
             LocationPermissionPolicy.resolve(
                 fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true,
                 anyGranted = permissions.values.any { it },
                 shouldShowRationale = shouldShowRationale(),
-                isRequestResult = true
+                isRequestResult = true,
+                // A result callback only fires after a request, so this is
+                // trivially true — read directly rather than through the
+                // persisted flag, which may still be mid-write.
+                hasRequestedBefore = true
             )
         )
     }

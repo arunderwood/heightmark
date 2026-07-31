@@ -24,6 +24,9 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
 private object PreferencesKeys {
     val USE_METRIC_UNIT = booleanPreferencesKey("use_metric_unit")
     val SHOW_DETAILS = booleanPreferencesKey("show_details")
+    val HAS_REQUESTED_LOCATION_PERMISSION = booleanPreferencesKey(
+        "has_requested_location_permission"
+    )
 }
 
 @Singleton
@@ -42,6 +45,21 @@ class PreferencesRepository @Inject constructor(@ApplicationContext context: Con
 
     suspend fun setShowDetails(show: Boolean) {
         setBoolean(PreferencesKeys.SHOW_DETAILS, show)
+    }
+
+    /**
+     * Whether this install has ever triggered the system location-permission
+     * dialog. Persisted, not session state: [LocationPermissionPolicy] uses
+     * it to tell a true first launch (land on the blocked screen's own
+     * explanation, no dialog) apart from a returning user the OS can no
+     * longer show a rationale for — a distinction that must survive the
+     * process dying between sessions, which a ViewModel-held flag would not.
+     */
+    val hasRequestedLocationPermission: Flow<Boolean> =
+        booleanFlow(PreferencesKeys.HAS_REQUESTED_LOCATION_PERMISSION, default = false)
+
+    suspend fun setHasRequestedLocationPermission(requested: Boolean) {
+        setBoolean(PreferencesKeys.HAS_REQUESTED_LOCATION_PERMISSION, requested)
     }
 
     private fun booleanFlow(key: Preferences.Key<Boolean>, default: Boolean): Flow<Boolean> =
