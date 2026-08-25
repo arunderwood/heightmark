@@ -161,9 +161,13 @@ Triggers on push to `main` and on all PRs (deliberately no base-branch filter, t
 
 Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`.
 
+The workflow is in a `${{ github.workflow }}-${{ github.ref }}` concurrency group with `cancel-in-progress`, so a merge burst validates the tip of `main` once instead of starting a run per intermediate commit — six of those runs contend for the same Gradle home cache and queue six Play Store releases.
+
 ### Quality Gates
 
 All releases must pass: security scan (Trivy), lint (including accessibility-as-error), unit tests, and instrumented tests. Releases only happen if ALL checks pass.
+
+`main` carries a repository ruleset (`main`, id 21362856) that requires a PR and requires *Security Scan*, *Build, Lint & Unit Tests*, and *Instrumented Tests* to pass with **strict** status checks — the PR branch must be up to date with `main` before it can merge. Without that, PRs cut from the same base each go green against a `main` that no longer exists by the time they land, and the combination they add up to is never built. Repository admins can bypass, so the escape hatch is still there. Dependabot updates are grouped one PR per ecosystem (`.github/dependabot.yml`) so this does not turn a day's bumps into several sequential rebase-and-wait cycles.
 
 ### GitHub Workflow Testing
 
