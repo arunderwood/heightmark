@@ -7,6 +7,14 @@ on:
   # need the same quality gates as PRs targeting main
   pull_request:
 
+# A merge burst (several Dependabot PRs landing seconds apart) otherwise starts
+# one full run per intermediate commit. Those runs race each other for the same
+# Gradle home cache, and each success queues its own Play Store release. Only
+# the tip of main needs validating, so supersede the runs behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false -Dorg.gradle.configuration-cache=true
 

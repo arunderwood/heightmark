@@ -1,11 +1,22 @@
 version: 2
 updates:
+  # One grouped PR per ecosystem, not one per dependency. Ungrouped, a day's
+  # bumps arrive as several PRs that all branch from the same base commit, so
+  # each is only ever green against a main that no longer exists once its
+  # siblings merge. Grouping makes the combination that actually lands on main
+  # the combination CI tested.
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "daily"
+    groups:
+      gradle:
+        patterns: ["*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
+    groups:
+      github-actions:
+        patterns: ["*"]
