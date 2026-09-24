@@ -111,8 +111,8 @@ Every merge to `main` automatically creates a new release if all quality checks 
 
 **Flow:**
 1. PR merged to main → `android_build.yml` ("Android CI") re-runs on main
-2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** on main (not on push directly)
-3. Release workflow: calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and creates a GitHub release with auto-generated notes. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
+2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** for a push to main (not on push directly). The job's `if:` also requires `workflow_run.event == 'push'` from this repository: the `branches` filter matches the triggering run's *head* branch, so a fork PR from a branch named `main` would otherwise pass it
+3. Release workflow: checks out `workflow_run.head_sha` (the commit CI tested; the `workflow_run` default is the newest main commit, which may not have passed yet), calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and creates a GitHub release tagged at that same SHA with auto-generated notes. The keystore is decoded to `$RUNNER_TEMP`, outside the workspace. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
 
 Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars (populated from secrets in CI); if any is missing the signing config is left empty and local `assembleRelease`/`bundleRelease` output is unsigned.
 
@@ -153,11 +153,11 @@ All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering
 
 ### CI (`.github/workflows/android_build.yml`)
 
-Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). Three jobs:
+Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). A concurrency group cancels superseded PR runs; main runs get a group per commit, so none is cancelled, because `release.yml` needs a CI result for every merged commit. Every job has a `timeout-minutes`. Three jobs, all running in parallel:
 
 1. **security**: Trivy filesystem scan → SARIF upload (runs immediately, parallel with build)
-2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug assembleRelease` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; Gradle cache write access. `assembleRelease` is there so R8 and resource shrinking are exercised on every PR rather than first running in `release.yml`; without signing secrets it produces an unsigned APK that is built but never uploaded
-3. **instrumented-tests** (needs build-and-test): emulator tests on API 35 (google_apis, x86_64) with KVM, AVD snapshot caching, and read-only Gradle cache (avoids conflicts with job 2)
+2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug assembleRelease` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; `setup-gradle`'s default cache mode (writes on main, read-only on PRs, which keeps PR entries out of the 10 GB repo cache quota). `assembleRelease` is there so R8 and resource shrinking are exercised on every PR rather than first running in `release.yml`; without signing secrets it produces an unsigned APK that is built but never uploaded
+3. **instrumented-tests**: emulator tests on API 35 (google_apis, x86_64) with KVM, AVD snapshot caching, and read-only Gradle cache (avoids conflicts with job 2). No `needs:` on job 2: it builds its own APKs and consumes nothing from job 2. The AVD snapshot (~3 GB) is restored everywhere but saved only on main, right after creation. PR-scoped entries can't be restored by any other ref, and a few of them evict main's entry
 
 Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`.
 

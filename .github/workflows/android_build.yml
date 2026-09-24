@@ -7,6 +7,13 @@ on:
   # need the same quality gates as PRs targeting main
   pull_request:
 
+# Each push to a PR supersedes the run before it. Main runs get a group per
+# commit, so none is cancelled or queued behind another: release.yml needs a
+# successful CI result for every merged commit.
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: true
+
 env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false -Dorg.gradle.configuration-cache=true
 
@@ -15,6 +22,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       security-events: write
@@ -40,6 +48,7 @@ jobs:
   build-and-test:
     name: Build, Lint & Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       checks: write
@@ -60,10 +69,10 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           
+      # The default is read-only off main, so PRs restore main's Gradle cache
+      # without adding their own entries to the repo's 10 GB cache quota.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6.3.0
-        with:
-          cache-read-only: false
 
       - name: Make gradlew executable
         run: chmod +x ./gradlew
@@ -100,10 +109,12 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
+  # No `needs: build-and-test`: this job builds its own APKs, so the two jobs
+  # run side by side. release.yml still waits for both to pass.
   instrumented-tests:
     name: Instrumented Tests
     runs-on: ubuntu-latest
-    needs: build-and-test
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -134,8 +145,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
           
-      - name: AVD cache
-        uses: actions/cache@v6
+      - name: Restore AVD cache
+        uses: actions/cache/restore@v6
         id: avd-cache
         with:
           path: |
@@ -160,7 +171,20 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
-          
+
+      # Only main saves the snapshot. A PR's entry is ~3 GB, no other ref can
+      # restore it, and a few of them evict main's entry from the 10 GB quota.
+      # Saving here, before the tests run, keeps the snapshot clean and saves it
+      # even when a test fails.
+      - name: Save AVD cache
+        if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
         with:
