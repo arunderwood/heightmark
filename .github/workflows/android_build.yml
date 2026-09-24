@@ -128,10 +128,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           
+      # The default mode, like build-and-test: writes on main, read-only on PRs.
+      # This job resolves dependencies no other job does, such as the UTP test
+      # runner and its junit-platform artifacts. Without its own main entry,
+      # every run downloads them from Maven Central and fails whenever Central
+      # does.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        with:
-          cache-read-only: true
 
       - name: Enable KVM group perms
         run: |
