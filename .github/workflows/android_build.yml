@@ -28,7 +28,9 @@ jobs:
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -39,7 +41,7 @@ jobs:
           output: 'trivy-results.sarif'
           
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v4.38.1
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
@@ -53,18 +55,18 @@ jobs:
       contents: read
       checks: write
       pull-requests: write
-    outputs:
-      apk-path: ${{ steps.build.outputs.apk-path }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         
       # Must satisfy toolchainVersion AND toolchainVendor in
       # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
       # provisions its own. Changing distribution here requires updating that
       # file too.
       - name: Set up JDK 21
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -72,38 +74,31 @@ jobs:
       # The default is read-only off main, so PRs restore main's Gradle cache
       # without adding their own entries to the repo's 10 GB cache quota.
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.3.0
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-
-      - name: Run lint, tests, and build in parallel
-        id: build
+      - name: Run lint, tests, and build
         run: |
           # assembleRelease is the PR gate on R8 and resource shrinking, which no
           # debug task exercises. This job has no signing secrets, so the release
           # APK it produces is unsigned and is never uploaded.
-          ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease --parallel --build-cache
-          echo "apk-path=app/build/outputs/apk/debug/*.apk" >> $GITHUB_OUTPUT
+          ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease
         
       - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2
+        uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
         if: always()
         with:
-          files: |
-            app/build/test-results/testDebugUnitTest/TEST-*.xml
-            app/build/test-results/testReleaseUnitTest/TEST-*.xml
+          files: app/build/test-results/testDebugUnitTest/TEST-*.xml
           check_name: Unit Test Results
           comment_mode: always
           
       - name: Report Android Lint Results
-        uses: yutailang0119/action-android-lint@8345a8dece583030445b0b5f9611209431d601c4 # v5
+        uses: yutailang0119/action-android-lint@8345a8dece583030445b0b5f9611209431d601c4 # v5.0.0
         if: always()
         with:
           report-path: app/build/reports/lint-results-debug.xml
           
       - name: Upload debug APK
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
@@ -119,25 +114,24 @@ jobs:
       contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         
       # Must satisfy toolchainVersion AND toolchainVendor in
       # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
       # provisions its own. Changing distribution here requires updating that
       # file too.
       - name: Set up JDK 21
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
           
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.3.0
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: true
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
 
       - name: Enable KVM group perms
         run: |
@@ -146,7 +140,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           
       - name: Restore AVD cache
-        uses: actions/cache/restore@v6
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: avd-cache
         with:
           path: |
@@ -159,7 +153,7 @@ jobs:
             
       - name: Create AVD and generate snapshot for caching
         if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           target: google_apis
@@ -178,7 +172,7 @@ jobs:
       # even when a test fails.
       - name: Save AVD cache
         if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.android/avd/*
@@ -186,7 +180,7 @@ jobs:
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
       - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           target: google_apis
@@ -197,10 +191,10 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
           disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest --parallel --build-cache --no-daemon
+          script: ./gradlew connectedDebugAndroidTest
           
       - name: Upload instrumented test reports
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: instrumented-test-reports

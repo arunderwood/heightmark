@@ -1,11 +1,20 @@
 version: 2
 updates:
+  # Every merge to main publishes a Play Store release, so the cooldown and the
+  # actions group both cut the number of releases a week of bumps produces.
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]

@@ -1,6 +1,9 @@
 name: Release to Google Play Store
 
-on:
+# workflow_run is how a release waits for a green CI run. The release job's
+# `if:` admits only pushes from this repository, and the checkout pins the
+# tested SHA, so no fork-controlled code or ref reaches the signing secrets.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: ["Android CI"]
     branches: [main]
@@ -37,10 +40,10 @@ jobs:
       # Build the commit CI tested. The workflow_run default is the newest main
       # commit, which may not have passed CI yet.
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Calculate version
         id: version
@@ -49,11 +52,11 @@ jobs:
           BASE_CODE=10000
           VERSION_PREFIX="1.0"
 
-          VERSION_CODE=$((BASE_CODE + ${{ github.run_number }}))
-          VERSION_NAME="${VERSION_PREFIX}.${{ github.run_number }}"
+          VERSION_CODE=$((BASE_CODE + GITHUB_RUN_NUMBER))
+          VERSION_NAME="${VERSION_PREFIX}.${GITHUB_RUN_NUMBER}"
 
-          echo "code=${VERSION_CODE}" >> $GITHUB_OUTPUT
-          echo "name=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
+          echo "name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "📦 Building version: ${VERSION_NAME} (versionCode: ${VERSION_CODE})"
 
       # Must satisfy toolchainVersion AND toolchainVendor in
@@ -61,16 +64,13 @@ jobs:
       # provisions its own. Changing distribution here requires updating that
       # file too.
       - name: Set up JDK 21
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.3.0
-
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
       # Outside the workspace, so no artifact upload glob can reach it.
       - name: Decode keystore
@@ -85,11 +85,12 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           ./gradlew bundleRelease \
-            -PversionName=${{ steps.version.outputs.name }} \
-            -PversionCode=${{ steps.version.outputs.code }} \
-            --parallel --build-cache
+            -PversionName="$VERSION_NAME" \
+            -PversionCode="$VERSION_CODE"
 
       - name: Clean up keystore
         if: always()
@@ -107,7 +108,7 @@ jobs:
           whatsNewDirectory: metadata/whatsnew
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-artifacts-v${{ steps.version.outputs.name }}
           path: app/build/outputs/bundle/release/*.aab
@@ -117,10 +118,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
-          gh release create "v${{ steps.version.outputs.name }}" \
+          gh release create "v$VERSION_NAME" \
             --repo="$GITHUB_REPOSITORY" \
             --target="$HEAD_SHA" \
-            --title="HeightMark v${{ steps.version.outputs.name }}" \
+            --title="HeightMark v$VERSION_NAME" \
             --generate-notes \
             app/build/outputs/bundle/release/app-release.aab
