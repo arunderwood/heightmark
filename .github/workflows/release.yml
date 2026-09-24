@@ -1,6 +1,6 @@
 name: Release to Google Play Store
 
-# workflow_run is how a release waits for a green CI run. The release job's
+# workflow_run is how a release waits for a green CI run. The check-tip job's
 # `if:` admits only pushes from this repository, and the checkout pins the
 # tested SHA, so no fork-controlled code or ref reaches the signing secrets.
 on: # zizmor: ignore[dangerous-triggers]
@@ -10,8 +10,7 @@ on: # zizmor: ignore[dangerous-triggers]
     types:
       - completed
 
-permissions:
-  contents: write
+permissions: {}
 
 # The Play Publishing API allows only one open edit per app, so concurrent
 # release runs (e.g. from a Dependabot merge batch) invalidate each other.
@@ -24,17 +23,48 @@ env:
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false
 
 jobs:
-  release:
-    name: Build & Release to Play Store
+  # Releases only main's tip. When a batch of merges lands, the newest commit's
+  # release ships every earlier change, so releasing a superseded commit only
+  # spends a Play upload. It also fails at the tag: GITHUB_TOKEN may not tag a
+  # commit behind main once a later merge has changed workflow files.
+  check-tip:
+    name: Check commit is main's tip
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     # The `branches` filter above matches the triggering run's head branch, so
     # a fork PR from a branch named `main` also passes it. Only a push to this
-    # repository may reach the signing secrets.
+    # repository may reach the release job and its signing secrets.
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
+    permissions:
+      contents: read
+    outputs:
+      current: ${{ steps.tip.outputs.current }}
+    steps:
+      - name: Compare with main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [ "$main_sha" = "$HEAD_SHA" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Release skipped::main has moved to ${main_sha:0:7}; its release ships ${HEAD_SHA:0:7} too."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Build & Release to Play Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check-tip
+    if: needs.check-tip.outputs.current == 'true'
+    permissions:
+      contents: write
 
     steps:
       # Build the commit CI tested. The workflow_run default is the newest main
