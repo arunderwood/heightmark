@@ -111,8 +111,8 @@ Every merge to `main` automatically creates a new release if all quality checks 
 
 **Flow:**
 1. PR merged to main → `android_build.yml` ("Android CI") re-runs on main
-2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** on main (not on push directly)
-3. Release workflow: calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and creates a GitHub release with auto-generated notes. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
+2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** for a push to main (not on push directly). The job's `if:` also requires `workflow_run.event == 'push'` from this repository: the `branches` filter matches the triggering run's *head* branch, so a fork PR from a branch named `main` would otherwise pass it
+3. Release workflow: checks out `workflow_run.head_sha` (the commit CI tested; the `workflow_run` default is the newest main commit, which may not have passed yet), calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and creates a GitHub release tagged at that same SHA with auto-generated notes. The keystore is decoded to `$RUNNER_TEMP`, outside the workspace. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
 
 Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars (populated from secrets in CI); if any is missing the signing config is left empty and local `assembleRelease`/`bundleRelease` output is unsigned.
 
