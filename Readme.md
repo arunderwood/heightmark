@@ -5,6 +5,23 @@
 Map apps make it easy to learn where you are in 2D space but I want an easy reference to see what elevation I'm at. 
 This Android app is a simple way to be able to glance at current elevation.  It's also an excuse to learn about about writing Android apps.
 
+## Install
+
+[<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="48">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/arunderwood/heightmark)
+
+Each [GitHub release](https://github.com/arunderwood/heightmark/releases) has a signed APK that [Obtainium](https://obtainium.imranr.dev/) can track and update. Requires Android 14+.
+
+**Verify the first install.** Android rejects updates signed by a different key, so only the first install needs checking. Paste this into [AppVerifier](https://github.com/soupslurpr/AppVerifier), or compare it with `apksigner verify --print-certs`:
+
+```
+com.bizzarosn.heightmark
+21:71:C5:4B:AD:49:79:4A:3B:C3:57:A6:2B:14:9C:DB:9C:08:A8:C0:65:82:EB:CB:BA:53:90:A6:95:A3:A8:68
+```
+
+Each APK also has a build provenance attestation: `gh attestation verify heightmark-v<version>.apk -R arunderwood/heightmark`.
+
+The Play Store build uses a different key, so switching between the two needs an uninstall.
+
 ## How it works
 
 - Elevation comes straight from GNSS via the platform `LocationManager` — **no Google Play services dependency**, so the app works identically on certified devices and de-googled AOSP builds (GrapheneOS, LineageOS, CalyxOS, /e/OS).
