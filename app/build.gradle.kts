@@ -80,6 +80,19 @@ android {
         unitTests.all {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
+        // Run with ./gradlew pixel8proapi35DebugAndroidTest. AGP downloads the
+        // image, boots a headless emulator, runs the tests, and shuts it down.
+        // aosp-atd: no Google services, which the app never uses, and a
+        // lighter image than google_apis. Same API level as the CI emulator.
+        managedDevices {
+            localDevices {
+                create("pixel8proapi35") {
+                    device = "Pixel 8 Pro"
+                    apiLevel = 35
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
     }
     lint {
         // Severities live in lint.xml, where the whole Accessibility category
