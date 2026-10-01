@@ -16,7 +16,7 @@ import androidx.test.rule.GrantPermissionRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import org.hamcrest.Matchers.allOf
 import org.hamcrest.Matchers.not
-import org.junit.Assume.assumeFalse
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,13 +59,13 @@ class CoarseLocationPermissionTest : HiltUiTestBase() {
 
     @Test
     fun appPromptsForPreciseLocationWithCoarseOnly() {
-        // GrantPermissionRule grants persist for the whole instrumentation run, so
-        // when another test class has already granted FINE this coarse-only
-        // scenario can't be exercised — skip rather than assert the wrong flow.
-        // The assertion runs when this class executes in isolation.
+        // GrantPermissionRule grants can't be revoked within a process. The
+        // orchestrator's clearPackageData (app/build.gradle.kts) resets them
+        // before each test; if FINE is granted here, that isolation is broken
+        // and this test would assert the wrong flow, so fail rather than skip.
         val context = ApplicationProvider.getApplicationContext<Context>()
-        assumeFalse(
-            "FINE already granted by an earlier test; coarse-only flow unavailable",
+        assertFalse(
+            "FINE is granted: per-test permission isolation (orchestrator + clearPackageData) is not in effect",
             context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
                 PackageManager.PERMISSION_GRANTED
         )

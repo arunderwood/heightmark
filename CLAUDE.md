@@ -156,6 +156,8 @@ Tests assert behavior, not language semantics. Reflection checks that a construc
 
 All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering matters — `HiltAndroidRule` must be first (`order = 0`), `GrantPermissionRule` after it.
 
+Instrumented tests run under **Android Test Orchestrator** (`testOptions.execution = "ANDROIDX_TEST_ORCHESTRATOR"`) with `clearPackageData=true`: each test gets its own instrumentation process, and `pm clear` before it resets app data *and* runtime permissions. That is what lets `CoarseLocationPermissionTest` see a coarse-only grant — `GrantPermissionRule` grants can't be revoked within a process, so in a shared run an earlier test's FINE grant would leak into it. The test asserts FINE is *not* granted and fails if that isolation is ever lost; don't turn it back into an `assume`, which would skip silently. A side effect: no DataStore preference (e.g. the "permission requested" flag) carries over between tests.
+
 ### CI (`.github/workflows/android_build.yml`)
 
 Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). A concurrency group cancels superseded PR runs; main runs get a group per commit, so none is cancelled, because `release.yml` needs a CI result for every merged commit. Every job has a `timeout-minutes`. Four jobs, all running in parallel:
