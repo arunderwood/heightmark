@@ -182,12 +182,10 @@ jobs:
             ~/.android/adb*
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
-      # No hardware inputs here, and cores blanked from its default of 2. The
-      # action appends every hardware input to config.ini on each launch, even
-      # for an existing AVD. A second copy of those lines no longer matches the
-      # config the snapshot was saved with, so the emulator discards the
-      # snapshot and cold-boots. The AVD already carries these values from the
-      # step that created it.
+      # Leave out hardware inputs (ram-size, disk-size, ...) and blank cores,
+      # which defaults to 2. The action appends them to config.ini on every
+      # launch; a duplicate makes the emulator reject the snapshot and cold
+      # boot. The AVD already has them from the step that created it.
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
@@ -205,8 +203,7 @@ jobs:
         if: always()
         with:
           name: instrumented-test-reports
-          # androidTest-results holds the per-test logcat, which names whatever
-          # held window focus when Espresso reports RootViewWithoutFocusException.
+          # androidTest-results holds each test's logcat.
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
