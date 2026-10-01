@@ -75,6 +75,11 @@ jobs:
       # without adding their own entries to the repo's 10 GB cache quota.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        # A fixed key lets a restored configuration-cache entry be decrypted;
+        # Gradle's default key is random per runner. Fork and Dependabot PRs
+        # get no secret and simply reconfigure.
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Run lint, tests, and build
         run: |
@@ -135,6 +140,11 @@ jobs:
       # does.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        # A fixed key lets a restored configuration-cache entry be decrypted;
+        # Gradle's default key is random per runner. Fork and Dependabot PRs
+        # get no secret and simply reconfigure.
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Enable KVM group perms
         run: |
@@ -237,6 +247,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        # A fixed key lets a restored configuration-cache entry be decrypted;
+        # Gradle's default key is random per runner. Fork and Dependabot PRs
+        # get no secret and simply reconfigure.
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Enable KVM group perms
         run: |
@@ -257,9 +272,12 @@ jobs:
             !~/.android/avd/gradle-managed/active_gradle_devices
           key: gmd-pixel8proapi35-aospatd-${{ runner.os }}-v1
 
-      # A separate step so the job log shows provisioning time apart from test
-      # time. On a cache hit it only validates the restored device.
+      # Cache miss only: creates the device and its boot snapshot, so the save
+      # below captures them before any test has run. On a hit, the test task's
+      # own setup dependency checks the restored device, and skipping this
+      # step saves a Gradle start-up and configuration pass.
       - name: Set up managed device
+        if: steps.gmd-cache.outputs.cache-hit != 'true'
         run: ./gradlew pixel8proapi35Setup "$GMD_GPU"
 
       # Main only, like the AVD cache above: a PR's entry can't be restored by
