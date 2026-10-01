@@ -28,6 +28,10 @@ HeightMark is a simple Android app that displays the user's current elevation/al
 # Run a single instrumented test class
 ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.bizzarosn.heightmark.StartupCrashTest
 
+# Run instrumented tests on the Gradle Managed Device (no running emulator needed;
+# AGP downloads the API 35 aosp-atd image, boots it headless, and tears it down)
+./gradlew pixel8proapi35DebugAndroidTest
+
 # Lint (Accessibility category is promoted to error severity — see app/lint.xml)
 ./gradlew lintDebug
 
@@ -154,11 +158,12 @@ All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering
 
 ### CI (`.github/workflows/android_build.yml`)
 
-Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). A concurrency group cancels superseded PR runs; main runs get a group per commit, so none is cancelled, because `release.yml` needs a CI result for every merged commit. Every job has a `timeout-minutes`. Three jobs, all running in parallel:
+Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). A concurrency group cancels superseded PR runs; main runs get a group per commit, so none is cancelled, because `release.yml` needs a CI result for every merged commit. Every job has a `timeout-minutes`. Four jobs, all running in parallel:
 
 1. **security**: Trivy filesystem scan → SARIF upload (runs immediately, parallel with build)
 2. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug assembleRelease` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; `setup-gradle`'s default cache mode (writes on main, read-only on PRs, which keeps PR entries out of the 10 GB repo cache quota). `assembleRelease` is there so R8 and resource shrinking are exercised on every PR rather than first running in `release.yml`; without signing secrets it produces an unsigned APK that is built but never uploaded
 3. **instrumented-tests**: emulator tests on API 35 (google_apis, x86_64) with KVM, AVD snapshot caching, and `setup-gradle`'s default cache mode like job 2. It saves its own main entry because it alone resolves the UTP test runner's dependencies (`junit-platform-*`); a read-only cache made every run fetch them from Maven Central, so a Central outage (HTTP 403) failed the build. No `needs:` on job 2: it builds its own APKs and consumes nothing from job 2. The AVD snapshot (~3 GB) is restored everywhere but saved only on main, right after creation. PR-scoped entries can't be restored by any other ref, and a few of them evict main's entry
+4. **managed-device-tests**: a trial of Gradle Managed Devices as a replacement for job 3. Runs the same tests on the `pixel8proapi35` device (`aosp-atd`) declared in `app/build.gradle.kts`, with `swiftshader_indirect` GPU. `pixel8proapi35Setup` runs as its own step so provisioning time shows apart from test time. Caches `~/.android/avd/gradle-managed` (minus lock files and `active_gradle_devices`) on main only, like job 3. Job-level `continue-on-error: true` keeps its failures out of the run's conclusion, so it cannot block `release.yml`
 
 Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`. Do not repeat them as `--parallel`/`--build-cache`/`--no-daemon` on the `./gradlew` command lines.
 
