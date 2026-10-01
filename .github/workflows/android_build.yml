@@ -192,15 +192,17 @@ jobs:
             ~/.android/adb*
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
+      # Leave out hardware inputs (ram-size, disk-size, ...) and blank cores,
+      # which defaults to 2. The action appends them to config.ini on every
+      # launch; a duplicate makes the emulator reject the snapshot and cold
+      # boot. The AVD already has them from the step that created it.
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 35
           target: google_apis
           arch: x86_64
-          disk-size: 2048M
-          ram-size: 4096M
-          heap-size: 512M
+          cores: ''
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
           disable-animations: true
@@ -211,7 +213,10 @@ jobs:
         if: always()
         with:
           name: instrumented-test-reports
-          path: app/build/reports/androidTests/
+          # androidTest-results holds each test's logcat.
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
           retention-days: 7
 
   # Trial of Gradle Managed Devices (GMD) as a replacement for the
