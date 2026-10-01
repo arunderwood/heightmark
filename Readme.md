@@ -9,7 +9,7 @@ This Android app is a simple way to be able to glance at current elevation.  It'
 
 [<img src="https://raw.githubusercontent.com/ImranR98/Obtainium/main/assets/graphics/badge_obtainium.png" alt="Get it on Obtainium" height="48">](https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/arunderwood/heightmark)
 
-Each [GitHub release](https://github.com/arunderwood/heightmark/releases) has a signed APK that [Obtainium](https://obtainium.imranr.dev/) can track and update. Requires Android 14+.
+Each [GitHub release](https://github.com/arunderwood/heightmark/releases) has a signed APK that can be installed by hand, or through [Obtainium](https://obtainium.imranr.dev/). Requires Android 14+.
 
 **Verify the first install.** Android rejects updates signed by a different key, so only the first install needs checking. Paste this into [AppVerifier](https://github.com/soupslurpr/AppVerifier), or compare it with `apksigner verify --print-certs`:
 
