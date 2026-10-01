@@ -168,8 +168,11 @@ jobs:
           fi
           build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           "$build_tools/apksigner" verify --print-certs "dist/heightmark-v${VERSION_NAME}.apk" > "$RUNNER_TEMP/certs.txt"
-          # One line per signer, so a second signer also fails the comparison.
-          actual=$(sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt")
+          cat "$RUNNER_TEMP/certs.txt"
+          # The line prefix varies by build-tools version ("Signer #1" through
+          # 36, one "V2 Signer:"/"V3.0 Signer:" line per scheme from 37), so
+          # match on the suffix and dedupe. A second signer leaves two values.
+          actual=$(sed -n 's/^.*certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | sort -u)
           if [ "$actual" != "$expected" ]; then
             echo "::error title=Wrong signer::Expected one signer with SHA-256 $expected, got: ${actual:-none}"
             exit 1
