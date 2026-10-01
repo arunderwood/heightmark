@@ -28,6 +28,10 @@ android {
         versionName = project.findProperty("versionName") as String? ?: "1.0.0-dev"
 
         testInstrumentationRunner = "com.bizzarosn.heightmark.HiltTestRunner"
+        // With the orchestrator below, `pm clear` runs before every test. That
+        // also resets runtime permissions, so each test sees exactly what its
+        // own GrantPermissionRule granted, and no DataStore state carries over.
+        testInstrumentationRunnerArguments["clearPackageData"] = "true"
     }
 
 
@@ -77,6 +81,10 @@ android {
         }
     }
     testOptions {
+        // One instrumentation process per test: GrantPermissionRule grants
+        // can't be revoked mid-run, so without this the first test to grant
+        // fine location would leave it granted for every later test.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
         unitTests.all {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
@@ -131,6 +139,8 @@ dependencies {
     androidTestImplementation(libs.accessibility.test.framework)
     androidTestImplementation(libs.androidx.test.rules)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestUtil(libs.androidx.test.orchestrator)
+    androidTestUtil(libs.androidx.test.services)
 
     // Hilt Testing
     androidTestImplementation(libs.hilt.android.testing)
