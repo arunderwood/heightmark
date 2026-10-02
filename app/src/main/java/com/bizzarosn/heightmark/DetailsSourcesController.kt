@@ -54,8 +54,8 @@ class DetailsSourcesController(
         }
 
         if (pressureListener == null) {
-            // The panel repaints on a 1 s ticker anyway, so UI rate is plenty —
-            // IdleWakeMonitor samples the same sensor faster to catch elevators
+            // The panel repaints on a 1 s ticker, so the UI rate (about 15 Hz)
+            // is more than it needs
             pressureListener = sensorManager.registerPressureListener(
                 SensorManager.SENSOR_DELAY_UI
             ) { hpa, _ -> pressureHpa = hpa }
