@@ -75,6 +75,15 @@ class ElevationTracker @Inject constructor(
         publish()
     }
 
+    // The first conversion in a region can take seconds, and the fixes that
+    // arrive behind it must commit in arrival order. The consumer survives
+    // goIdle because the fix that tips the stillness detector is still
+    // converted after the radio is off
+    private val conversions = SerialConversion<Conversion, Elevation>(
+        convert = { withContext(Dispatchers.IO) { altitudeResolver.resolve(it.location) } },
+        deliver = ::onConverted
+    )
+
     private var locationListener: LocationListener? = null
     private var searchTimeoutJob: Job? = null
     private var fixWatchdogJob: Job? = null
@@ -160,6 +169,7 @@ class ElevationTracker @Inject constructor(
         unregisterProvidersReceiver()
         detailsSources.stop()
         stopLocationUpdates()
+        conversions.stop()
         publish()
     }
 
@@ -197,6 +207,7 @@ class ElevationTracker @Inject constructor(
         // returns early while the monitor is armed, so the radio would stay on.
         if (session.isIdle) return
 
+        conversions.start(viewModelScope)
         val listener = locationListener
             ?: LocationListener { location -> onGnssFix(location) }
                 .also { locationListener = it }
@@ -262,26 +273,25 @@ class ElevationTracker @Inject constructor(
         }
 
         val pending = session.offer(location) ?: return
-        viewModelScope.launch {
-            // Geoid data loads from disk on first use in a region
-            val elevation = withContext(Dispatchers.IO) {
-                altitudeResolver.resolve(location)
-            }
-            // The conversion may have populated a tighter, post-conversion
-            // accuracy bound on the same Location; prefer it over the
-            // pre-conversion figure session.offer() captured
-            val accuracy = location.mslAltitudeAccuracyOrNull() ?: pending.verticalAccuracyMeters
-            // The window was flushed while this fix was converting, or the fix
-            // came back on the wrong datum to join it: either way, drop it
-            if (!session.commit(pending, elevation, accuracy)) return@launch
-            lastLocation = location
-            // The fix that tips the stillness detector into goIdle still
-            // commits, and its radio is already off: arming a countdown
-            // against a silence that is now deliberate would flag "no signal"
-            // at the next wake
-            if (!session.isIdle) resetFixWatchdog()
-            publish()
-        }
+        conversions.submit(Conversion(location, pending))
+    }
+
+    private fun onConverted(conversion: Conversion, elevation: Elevation) {
+        val (location, pending) = conversion
+        // The conversion may have populated a tighter, post-conversion
+        // accuracy bound on the same Location; prefer it over the
+        // pre-conversion figure session.offer() captured
+        val accuracy = location.mslAltitudeAccuracyOrNull() ?: pending.verticalAccuracyMeters
+        // The window was flushed while this fix was converting, or the fix
+        // came back on the wrong datum to join it: either way, drop it
+        if (!session.commit(pending, elevation, accuracy)) return
+        lastLocation = location
+        // The fix that tips the stillness detector into goIdle still
+        // commits, and its radio is already off: arming a countdown
+        // against a silence that is now deliberate would flag "no signal"
+        // at the next wake
+        if (!session.isIdle) resetFixWatchdog()
+        publish()
     }
 
     /**
@@ -401,8 +411,11 @@ class ElevationTracker @Inject constructor(
         unregisterProvidersReceiver()
         detailsSources.stop()
         stopLocationUpdates()
+        conversions.stop()
         locationListener = null
     }
+
+    private data class Conversion(val location: Location, val pending: ElevationSession.PendingFix)
 
     companion object {
         private const val TAG = "ElevationTracker"
