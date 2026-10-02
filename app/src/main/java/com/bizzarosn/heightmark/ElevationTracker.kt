@@ -94,7 +94,12 @@ class ElevationTracker @Inject constructor(
      * (rotation, dark-mode switch); this ViewModel survives those and dies
      * only with the session, matching the "once per session" intent.
      */
-    var upgradeDialogShown = false
+    var upgradeDialogShown: Boolean = false
+        private set
+
+    fun markUpgradeDialogShown() {
+        upgradeDialogShown = true
+    }
 
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {

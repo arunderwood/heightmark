@@ -64,7 +64,7 @@ class ElevationFragment : Fragment() {
             fragment = this,
             onPermissionStateChanged = { state -> tracker.onPermissionState(state) },
             hasShownUpgradeDialog = { tracker.upgradeDialogShown },
-            onUpgradeDialogShown = { tracker.upgradeDialogShown = true },
+            onUpgradeDialogShown = { tracker.markUpgradeDialogShown() },
             hasRequestedPermissionBefore = { hasRequestedLocationPermission },
             onPermissionRequested = ::markPermissionRequested
         )
