@@ -137,8 +137,10 @@ android {
     lint {
         // Severities live in lint.xml, where the whole Accessibility category
         // is promoted to error; abortOnError (the AGP default, made explicit)
-        // turns those findings into CI build failures.
+        // turns those findings into CI build failures. warningsAsErrors gives
+        // every other warning the same weight, so none piles up unseen.
         abortOnError = true
+        warningsAsErrors = true
     }
 }
 
