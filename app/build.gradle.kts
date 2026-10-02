@@ -110,6 +110,14 @@ android {
             }
         }
     }
+    // The dependency-metadata block AGP writes into the APK signing block is
+    // encrypted with Google's key. F-Droid's scanner rejects it as an opaque
+    // blob, so the sideload APK leaves it out. The Play bundle keeps it,
+    // because Play uses it for SDK Index advisories.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
+    }
     lint {
         // Severities live in lint.xml, where the whole Accessibility category
         // is promoted to error; abortOnError (the AGP default, made explicit)
