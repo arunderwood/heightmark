@@ -134,18 +134,14 @@ jobs:
           echo "sdk=$ANDROID_HOME" >> "$GITHUB_OUTPUT"
 
       # Gradle Managed Devices keep their AVDs and default_boot snapshots in
-      # ~/.android/avd/gradle-managed. Lock files and the active-device
-      # registry describe the emulator that wrote them; restored on another
-      # runner they make GMD treat the device as in use. The two SDK paths are
-      # the emulator and system image that AGP would otherwise download.
+      # ~/.android/avd/gradle-managed. The two SDK paths are the emulator and
+      # system image that AGP would otherwise download.
       - name: Restore managed device cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: gmd-cache
         with:
           path: |
             ~/.android/avd/gradle-managed
-            !~/.android/avd/gradle-managed/**/*.lock
-            !~/.android/avd/gradle-managed/active_gradle_devices
             ${{ steps.gmd-key.outputs.sdk }}/emulator
             ${{ steps.gmd-key.outputs.sdk }}/system-images/android-35/aosp_atd
           key: ${{ steps.gmd-key.outputs.key }}
@@ -155,11 +151,37 @@ jobs:
       # before any test has run. On a hit, the test task's own setup dependency
       # checks the restored device, and skipping this step saves a Gradle
       # start-up and configuration pass.
+      #
+      # The emulator keeps writing to the AVD for a few seconds after the
+      # Gradle task returns, and tar fails the save when a file changes or
+      # disappears mid-read. So wait until no process holds a file in the AVD
+      # directory. Then delete the lock files and the active-device registry,
+      # which describe an emulator that no longer exists, so no runner restores
+      # them. actions/cache `!` patterns cannot drop them, because tar recurses
+      # into the directory the path names.
       - name: Set up managed device
         if: steps.gmd-cache.outputs.cache-hit != 'true'
-        run: ./gradlew pixel8proapi35Setup "$GMD_GPU"
+        run: |
+          ./gradlew pixel8proapi35Setup "$GMD_GPU"
+          avd_dir="$HOME/.android/avd/gradle-managed"
+          waited=0
+          # lsof's exit status also reflects unrelated warnings, so ignore it
+          # and test its output instead. The listing names whatever is still
+          # writing, in case the wait ever runs to its limit.
+          echo "Processes holding files in $avd_dir after the setup task:"
+          lsof +D "$avd_dir" 2>/dev/null || true
+          while [ -n "$(lsof -t +D "$avd_dir" 2>/dev/null)" ]; do
+            if [ "$waited" -ge 60 ]; then
+              echo "::warning title=Emulator still running::A process still holds files in $avd_dir after 60 s, so the cache save may fail."
+              break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+          done
+          echo "Waited ${waited}s for processes to release $avd_dir."
+          find "$avd_dir" \( -name '*.lock' -o -name active_gradle_devices \) -print -delete
 
-      # Only main saves the device. A PR's entry (~1.3 GB) can't be restored by
+      # Only main saves the device. A PR's entry (~2.2 GB) can't be restored by
       # any other ref, and a few of them evict main's from the 10 GB quota.
       - name: Save managed device cache
         if: github.ref == 'refs/heads/main' && steps.gmd-cache.outputs.cache-hit != 'true'
@@ -167,8 +189,6 @@ jobs:
         with:
           path: |
             ~/.android/avd/gradle-managed
-            !~/.android/avd/gradle-managed/**/*.lock
-            !~/.android/avd/gradle-managed/active_gradle_devices
             ${{ steps.gmd-key.outputs.sdk }}/emulator
             ${{ steps.gmd-key.outputs.sdk }}/system-images/android-35/aosp_atd
           key: ${{ steps.gmd-cache.outputs.cache-primary-key }}
