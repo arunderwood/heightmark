@@ -88,7 +88,7 @@ android {
         unitTests.all {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
-        // Run with ./gradlew ciGroupDebugAndroidTest, or one device with
+        // Run with ./gradlew allGroupDebugAndroidTest, or one device with
         // ./gradlew pixel8proapi36DebugAndroidTest. AGP downloads the image,
         // boots a headless emulator, runs the tests, and shuts it down.
         // aosp-atd: no Google services, which the app never uses, and a
@@ -100,9 +100,11 @@ android {
         // only one that sees the platform the app targets. Move it up when a
         // newer aosp-atd image appears.
         managedDevices {
-            val ciApiLevels = listOf(35, 36)
+            // CI runs one job per device; android_build.yml's matrix must list
+            // the same devices.
+            val deviceApiLevels = listOf(35, 36)
             localDevices {
-                ciApiLevels.forEach { level ->
+                deviceApiLevels.forEach { level ->
                     create("pixel8proapi$level") {
                         device = "Pixel 8 Pro"
                         apiLevel = level
@@ -120,8 +122,8 @@ android {
                 }
             }
             groups {
-                create("ci") {
-                    ciApiLevels.forEach { targetDevices.add(localDevices["pixel8proapi$it"]) }
+                create("all") {
+                    deviceApiLevels.forEach { targetDevices.add(localDevices["pixel8proapi$it"]) }
                 }
             }
         }

@@ -13,7 +13,7 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 ./gradlew lintDebug                 # warnings fail the build; Accessibility is error severity (app/lint.xml)
 ./gradlew connectedAndroidTest      # needs a device or emulator
 ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.bizzarosn.heightmark.StartupCrashTest
-./gradlew ciGroupDebugAndroidTest   # Gradle Managed Devices (API 35 + 36), as CI runs; no emulator needed
+./gradlew allGroupDebugAndroidTest  # Gradle Managed Devices (API 35 + 36); no emulator needed
 ```
 
 ## Architecture map
