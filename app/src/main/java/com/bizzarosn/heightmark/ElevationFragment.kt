@@ -132,6 +132,12 @@ class ElevationFragment : Fragment() {
             lifecycleScope.launch { preferencesRepository.setShowDetails(show) }
         }
 
+        // Reads the action at click time so the listener is installed once;
+        // with the details panel open, state republishes every second
+        blockedActionButton.setOnClickListener {
+            tracker.uiState.value.blockedAction?.let(::performBlockedAction)
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 tracker.uiState.collect { render(it) }
@@ -343,7 +349,6 @@ class ElevationFragment : Fragment() {
         }
         blockedActionButton.isVisible = true
         blockedActionButton.setText(action.labelRes)
-        blockedActionButton.setOnClickListener { performBlockedAction(action) }
     }
 
     private fun performBlockedAction(action: ElevationUiState.BlockedAction) {
