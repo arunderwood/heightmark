@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.bizzarosn.heightmark"
         minSdk = 34
-        targetSdk = 36
+        targetSdk = 37
 
         // Support dynamic versioning from CI, with local fallback
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 4
