@@ -86,19 +86,22 @@ class ElevationFragment : Fragment() {
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
 
-        // Nothing else consumes the navigation-bar inset, so the scrim column
-        // absorbs it itself; otherwise the details toggle sits under the
-        // gesture bar.
+        // Nothing else consumes the navigation-bar or display-cutout insets, so
+        // the scrim column absorbs them itself; otherwise the details toggle
+        // sits under the gesture bar, and in landscape the camera cutout covers
+        // the side of the hero number.
         val contentContainer = view.findViewById<View>(R.id.content_container)
         val initialPaddingLeft = contentContainer.paddingLeft
         val initialPaddingRight = contentContainer.paddingRight
         val initialPaddingBottom = contentContainer.paddingBottom
         ViewCompat.setOnApplyWindowInsetsListener(contentContainer) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val safe = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
             v.updatePadding(
-                left = initialPaddingLeft + systemBars.left,
-                right = initialPaddingRight + systemBars.right,
-                bottom = initialPaddingBottom + systemBars.bottom
+                left = initialPaddingLeft + safe.left,
+                right = initialPaddingRight + safe.right,
+                bottom = initialPaddingBottom + safe.bottom
             )
             insets
         }
