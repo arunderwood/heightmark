@@ -34,7 +34,7 @@ Revert on `main` (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a mer
 - PR runs cancel when superseded. `main` runs get a group per commit so none is cancelled.
 - Every job sets `timeout-minutes`.
 - **build-and-test** runs `lintDebug testDebugUnitTest assembleDebug assembleRelease` in one job. `assembleRelease` exercises R8 and resource shrinking on every PR. It is unsigned there and never uploaded.
-- **instrumented-tests** runs on the `pixel8proapi35` Gradle Managed Device with KVM and `swiftshader_indirect`. It has no `needs:` on job 1. Its name, `Instrumented Tests`, is a required status check in the `main` ruleset.
+- **instrumented-tests** runs on the `ci` Gradle Managed Device group (`pixel8proapi35`, `pixel8proapi36`) with KVM and `swiftshader_indirect`. It has no `needs:` on job 1. Its name, `Instrumented Tests`, is a required status check in the `main` ruleset.
 - Both jobs use `setup-gradle`'s default cache mode (writes on `main`, read-only on PRs). The managed-device cache is restored everywhere and saved only on `main`.
 - No job scans dependencies for advisories. Dependabot alerts and security updates cover that. Do not add a Trivy `fs` scan: Trivy finds Gradle dependencies only through a committed `gradle.lockfile`, which this repo lacks, so it reports zero findings.
 

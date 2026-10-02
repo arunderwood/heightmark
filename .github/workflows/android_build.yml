@@ -134,7 +134,7 @@ jobs:
             echo "::error title=No AGP version::gradle/libs.versions.toml has no agp = \"...\" line."
             exit 1
           fi
-          echo "key=gmd-pixel8proapi35-aospatd-agp$agp-$RUNNER_OS-v2" >> "$GITHUB_OUTPUT"
+          echo "key=gmd-ci-api35-api36-aospatd-agp$agp-$RUNNER_OS-v1" >> "$GITHUB_OUTPUT"
           echo "sdk=$ANDROID_HOME" >> "$GITHUB_OUTPUT"
 
       # Gradle Managed Devices keep their AVDs and default_boot snapshots in
@@ -148,11 +148,12 @@ jobs:
             ~/.android/avd/gradle-managed
             ${{ steps.gmd-key.outputs.sdk }}/emulator
             ${{ steps.gmd-key.outputs.sdk }}/system-images/android-35/aosp_atd
+            ${{ steps.gmd-key.outputs.sdk }}/system-images/android-36/aosp_atd
           key: ${{ steps.gmd-key.outputs.key }}
 
-      # Cache miss only: downloads the emulator and system image, then creates
-      # the device and its boot snapshot, so the save below captures them
-      # before any test has run. On a hit, the test task's own setup dependency
+      # Cache miss only: downloads the emulator and both system images, then
+      # creates each device and its boot snapshot, so the save below captures
+      # them before any test has run. On a hit, the test task's own setup dependency
       # checks the restored device, and skipping this step saves a Gradle
       # start-up and configuration pass.
       #
@@ -170,7 +171,7 @@ jobs:
       - name: Set up managed device
         if: steps.gmd-cache.outputs.cache-hit != 'true'
         run: |
-          ./gradlew pixel8proapi35Setup "$GMD_GPU"
+          ./gradlew pixel8proapi35Setup pixel8proapi36Setup "$GMD_GPU"
           avd_dir="$HOME/.android/avd/gradle-managed"
           waited=0
           # lsof's exit status also reflects unrelated warnings, so ignore it
@@ -189,8 +190,9 @@ jobs:
           echo "Waited ${waited}s for processes to release $avd_dir."
           find "$avd_dir" \( -name '*.lock' -o -name active_gradle_devices \) -print -delete
 
-      # Only main saves the device. A PR's entry (~2.2 GB) can't be restored by
-      # any other ref, and a few of them evict main's from the 10 GB quota.
+      # Only main saves the devices. A PR's entry (several GB for two devices)
+      # can't be restored by any other ref, and a few of them evict main's from
+      # the 10 GB quota.
       - name: Save managed device cache
         if: github.ref == 'refs/heads/main' && steps.gmd-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -199,10 +201,11 @@ jobs:
             ~/.android/avd/gradle-managed
             ${{ steps.gmd-key.outputs.sdk }}/emulator
             ${{ steps.gmd-key.outputs.sdk }}/system-images/android-35/aosp_atd
+            ${{ steps.gmd-key.outputs.sdk }}/system-images/android-36/aosp_atd
           key: ${{ steps.gmd-cache.outputs.cache-primary-key }}
 
       - name: Run instrumented tests
-        run: ./gradlew pixel8proapi35DebugAndroidTest "$GMD_GPU"
+        run: ./gradlew ciGroupDebugAndroidTest "$GMD_GPU"
 
       - name: Upload instrumented test reports
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

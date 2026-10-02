@@ -88,24 +88,40 @@ android {
         unitTests.all {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
-        // Run with ./gradlew pixel8proapi35DebugAndroidTest. AGP downloads the
-        // image, boots a headless emulator, runs the tests, and shuts it down.
+        // Run with ./gradlew ciGroupDebugAndroidTest, or one device with
+        // ./gradlew pixel8proapi36DebugAndroidTest. AGP downloads the image,
+        // boots a headless emulator, runs the tests, and shuts it down.
         // aosp-atd: no Google services, which the app never uses, and a
         // lighter image than google_apis.
+        //
+        // API 36 is the newest aosp-atd image Google publishes. Behavior gated
+        // on targetSdk (forced edge-to-edge, default predictive back) only
+        // runs on a device at that API level or above, so this device is the
+        // only one that sees the platform the app targets. Move it up when a
+        // newer aosp-atd image appears.
         managedDevices {
+            val ciApiLevels = listOf(35, 36)
             localDevices {
-                create("pixel8proapi35") {
-                    device = "Pixel 8 Pro"
-                    apiLevel = 35
-                    systemImageSource = "aosp-atd"
-                    // The emulator runs only images of the host's own ABI, and
-                    // the x86_64 aosp-atd image has no ARM translation. AGP 10
-                    // defaults testedAbi to arm64-v8a on every host, which
-                    // would leave x86_64 CI runners without a usable device.
-                    testedAbi = when (System.getProperty("os.arch")) {
-                        "aarch64", "arm64" -> "arm64-v8a"
-                        else -> "x86_64"
+                ciApiLevels.forEach { level ->
+                    create("pixel8proapi$level") {
+                        device = "Pixel 8 Pro"
+                        apiLevel = level
+                        systemImageSource = "aosp-atd"
+                        // The emulator runs only images of the host's own ABI,
+                        // and the x86_64 aosp-atd image has no ARM translation.
+                        // AGP 10 defaults testedAbi to arm64-v8a on every host,
+                        // which would leave x86_64 CI runners without a usable
+                        // device.
+                        testedAbi = when (System.getProperty("os.arch")) {
+                            "aarch64", "arm64" -> "arm64-v8a"
+                            else -> "x86_64"
+                        }
                     }
+                }
+            }
+            groups {
+                create("ci") {
+                    ciApiLevels.forEach { targetDevices.add(localDevices["pixel8proapi$it"]) }
                 }
             }
         }
