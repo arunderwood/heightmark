@@ -19,7 +19,7 @@ import java.io.IOException
  * ellipsoid height is still worth returning, but only if callers can tell the two
  * apart: [ElevationSession] keeps them out of one another's averages, and the
  * screen names the datum it is showing. Hence [Elevation] rather than a bare
- * Double, which is what let a fallback pass for a sea-level reading.
+ * Double, which could not stop a fallback passing for a sea-level reading.
  *
  * Keep a single instance: the converter caches geoid data between calls, so the
  * first conversion in a region may take seconds while later ones are cheap.

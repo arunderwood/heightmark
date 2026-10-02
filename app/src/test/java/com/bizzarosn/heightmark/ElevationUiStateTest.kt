@@ -168,9 +168,9 @@ class ElevationUiStateTest {
     @Test
     fun `the panel ticker cannot revive an answered prompt`() {
         // The panel restamps its clock every second, so consecutive states are
-        // never equal and a host sees every one of them. That is what used to
-        // put a dismissed dialog straight back up, so the silence has to hold
-        // across distinct emissions rather than rely on deduplication.
+        // never equal and a host sees every one of them. Without deduplication
+        // to absorb them, a dismissed dialog would go straight back up, so the
+        // silence has to hold across distinct emissions.
         val first = derive(
             blocked = ElevationUiState.Blocked.LocationServicesOff,
             locationPromptAnswered = true,

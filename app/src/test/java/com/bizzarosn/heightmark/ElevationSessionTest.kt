@@ -301,8 +301,9 @@ class ElevationSessionTest {
         session.onPaused(0L)
         session.onResumed(RESET_AFTER_GAP_MS + 1)
 
-        // Geoid conversion never comes back this time, so the window that
-        // used to be refused now has to carry the reading on its own datum
+        // Geoid conversion never comes back this time. The gap reset cleared
+        // the sea-level latch, so the window accepts ellipsoid readings and
+        // carries them on their own datum
         assertTrue(addReading(50.0, datum = ELLIPSOID))
         assertTrue(addReading(52.0, datum = ELLIPSOID))
 

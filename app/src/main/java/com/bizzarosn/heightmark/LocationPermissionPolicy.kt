@@ -13,7 +13,7 @@ package com.bizzarosn.heightmark
  * of ever having launched the system dialog tells those apart. A true first
  * launch lands on the blocked screen's own explanation instead of firing the
  * system dialog with no context; a returning, already-permanently-denied
- * user still gets the old auto-fire fallback, which resolves back to
+ * user gets the auto-fire fallback, which resolves back to
  * [LocationPermissionState.PermanentlyDenied] once the system silently
  * re-denies it.
  */

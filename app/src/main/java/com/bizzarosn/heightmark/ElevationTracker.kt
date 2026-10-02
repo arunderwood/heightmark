@@ -34,8 +34,8 @@ import javax.inject.Inject
  * feeds. It drives the pure policy in [ElevationSession] and publishes a
  * single [ElevationUiState] for hosts to render.
  *
- * A [ViewModel] because the session outlives the view: a rotation no longer
- * restarts the averaging window or re-acquires a fix. The host still owns when
+ * A [ViewModel] because the session outlives the view: a rotation neither
+ * restarts the averaging window nor re-acquires a fix. The host still owns when
  * tracking may run — [onForeground] and [onBackground] bracket every radio,
  * sensor and receiver this class holds, so nothing keeps drawing power behind
  * a screen the user has left.
@@ -176,7 +176,6 @@ class ElevationTracker @Inject constructor(
     }
 
     private fun startLocationUpdates() {
-        // Double-check permissions before starting location updates
         if (!appContext.hasFineLocationPermission()) {
             block(ElevationUiState.Blocked.PermissionRequired)
             return
@@ -204,7 +203,6 @@ class ElevationTracker @Inject constructor(
                 listener
             )
         } catch (e: SecurityException) {
-            // Log the unexpected security exception for debugging
             Log.e(TAG, "Unexpected SecurityException despite permission check", e)
             block(ElevationUiState.Blocked.PermissionRequired)
             return

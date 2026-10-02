@@ -6,11 +6,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Locks in the permission decision table. The expectations mirror the two
- * historical when-chains in LocationPermissionHandler (checkPermission and
- * handlePermissionResult), which this policy replaced, plus the
- * [hasRequestedBefore] branch that tells a true first launch apart from a
- * returning, already-permanently-denied user.
+ * Locks in the permission decision table for both entry points in
+ * LocationPermissionHandler (the initial check and the request-result
+ * callback), including the [hasRequestedBefore] branch that tells a true
+ * first launch apart from a returning, already-permanently-denied user.
  */
 class LocationPermissionPolicyTest {
 

@@ -205,7 +205,7 @@ class LocationPermissionHandler(
      * Builds and shows the single tracked dialog; callers gate on
      * [currentDialog]. Dismissible rather than forced — refusing (back,
      * outside tap, or the negative button) lands the user back on the
-     * blocked screen, which now explains the block and offers the same
+     * blocked screen, which explains the block and offers the same
      * recovery action as a persistent button.
      */
     private fun showDialog(

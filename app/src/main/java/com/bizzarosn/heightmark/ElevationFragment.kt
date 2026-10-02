@@ -86,9 +86,9 @@ class ElevationFragment : Fragment() {
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
 
-        // With the BottomNavigationView gone, nothing else consumes the
-        // navigation-bar inset; the scrim column now absorbs it itself so the
-        // details toggle doesn't end up under the gesture bar.
+        // Nothing else in the hierarchy consumes the navigation-bar inset, so
+        // the scrim column absorbs it to keep the details toggle clear of the
+        // gesture bar.
         val contentContainer = view.findViewById<View>(R.id.content_container)
         val initialPaddingLeft = contentContainer.paddingLeft
         val initialPaddingRight = contentContainer.paddingRight
