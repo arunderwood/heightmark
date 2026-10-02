@@ -18,7 +18,7 @@
 -renamesourcefileattribute SourceFile
 
 # The app needs no keep rules of its own: it uses no reflection or dynamic class
-# loading, Hilt and Navigation ship consumer rules, and AGP generates keep rules
+# loading, Hilt ships consumer rules, and AGP generates keep rules
 # for the classes named in the manifest and in XML resources (ElevationFragment,
 # StabilityLineView). Keep anything added here narrow — a package-wide
 # `-keep class com.bizzarosn.heightmark.** { *; }` opts the entire app out of
