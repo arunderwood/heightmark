@@ -44,7 +44,13 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 - Add Google Play services or `play-services-location`. The app runs on de-googled AOSP devices and stays F-Droid-eligible. Location uses `LocationManager` with `GPS_PROVIDER` only.
 - Re-add `org.jetbrains.kotlin.android`, a `kotlin` catalog version, or the `android.builtInKotlin` / `android.newDsl` opt-outs. AGP's built-in Kotlin is used, and the standalone plugin calls the legacy variant API, which AGP has deprecated for removal.
 - Repin the Daemon JVM vendor (`gradle/gradle-daemon-jvm.properties`) to `JETBRAINS`. Android Studio's bundled JBR is not on Gradle's toolchain search path, so every machine and CI job would download a JDK. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version`. Move the three together, and keep `distribution: 'temurin'` in all three `setup-java` steps.
-- Turn the `AppModule` bindings into `@Inject constructor`s (`LocationManager`, `SensorManager`, `AltitudeResolver`, `ElevationService`, `StillnessDetector`, `PressureDeltaDetector`). Their constructors take defaulted tuning values, which Dagger ignores and would try to inject as a `Long` or `Float`. `AltitudeResolver`'s `converter` param is also the `AltitudeResolverTest` seam. `ElevationSession` stays injectable only because its clock is an argument to `onPaused`/`onResumed`, not a constructor parameter.
+- Turn the `AppModule` bindings into `@Inject constructor`s. Each has its own reason:
+  - `LocationManager` and `SensorManager` are framework services from `getSystemService`, with no constructor to annotate.
+  - `ElevationService` takes a plain `Int` window size, which the module supplies as `DEFAULT_WINDOW_SIZE`.
+  - `StillnessDetector` and `PressureDeltaDetector` take only defaulted tuning values. Dagger ignores Kotlin defaults and would try to inject each `Long`, `Float` or `Int`.
+  - `AltitudeResolver`'s defaulted `converter` param is the `AltitudeResolverTest` seam. Dagger would ignore the default and demand an `AltitudeConverter` binding.
+
+  `ElevationSession` stays injectable only because its clock is an argument to `onPaused`/`onResumed`, not a constructor parameter.
 - Rotate the sideload signing key. A new signer strands every sideloaded install.
 - Rename the `Instrumented Tests` CI job. It is a required status check in the `main` ruleset.
 - Edit `ScrimContrastTest` to make a failure pass. It reads `ReadingState.DIMMED_TEXT_ALPHA`, the `StabilityLineView` alpha constants and the `hm_*` colors directly, so a contrast failure after changing them is the gate working.
