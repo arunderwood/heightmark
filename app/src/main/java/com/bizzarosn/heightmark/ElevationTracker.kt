@@ -191,7 +191,6 @@ class ElevationTracker @Inject constructor(
     }
 
     private fun startLocationUpdates() {
-        // Double-check permissions before starting location updates
         if (!appContext.hasFineLocationPermission()) {
             block(ElevationUiState.Blocked.PermissionRequired)
             return
@@ -225,7 +224,6 @@ class ElevationTracker @Inject constructor(
                 listener
             )
         } catch (e: SecurityException) {
-            // Log the unexpected security exception for debugging
             Log.e(TAG, "Unexpected SecurityException despite permission check", e)
             block(ElevationUiState.Blocked.PermissionRequired)
             return
