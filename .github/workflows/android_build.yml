@@ -171,7 +171,12 @@ jobs:
       - name: Set up managed device
         if: steps.gmd-cache.outputs.cache-hit != 'true'
         run: |
-          ./gradlew pixel8proapi35Setup pixel8proapi36Setup "$GMD_GPU"
+          # One device per Gradle invocation. In one invocation the setup
+          # tasks run as parallel workers, both install the emulator into the
+          # same SDK directory, and one install fails.
+          for device in pixel8proapi35 pixel8proapi36; do
+            ./gradlew "${device}Setup" "$GMD_GPU"
+          done
           avd_dir="$HOME/.android/avd/gradle-managed"
           waited=0
           # lsof's exit status also reflects unrelated warnings, so ignore it
