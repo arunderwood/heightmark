@@ -88,21 +88,16 @@ jobs:
   # the same time. The device list must match deviceApiLevels in
   # app/build.gradle.kts.
   instrumented-tests:
-    name: ${{ matrix.name }}
+    name: Instrumented Tests (API ${{ matrix.api }})
     strategy:
       # Each device reports its own result; one failing does not cancel the other.
       fail-fast: false
       matrix:
         include:
-          # API 36 keeps the bare job name, which is a required status check in
-          # the main ruleset; renaming it blocks merges. It is the device that
-          # runs behavior gated on targetSdk.
           - device: pixel8proapi36
             api: 36
-            name: Instrumented Tests
           - device: pixel8proapi35
             api: 35
-            name: Instrumented Tests (API 35)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -233,3 +228,27 @@ jobs:
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
           retention-days: 7
+
+  # The required status check in the main ruleset is this job's name, not a
+  # device job's, so adding or moving a device never touches the ruleset.
+  # Renaming this job blocks merges.
+  #
+  # always(): GitHub treats a skipped required check as passing, so this job
+  # must run, and fail, even when a device job fails or the run is cancelled.
+  # A matrix job's result is success only when every device succeeded.
+  instrumented-tests-gate:
+    name: Instrumented Tests
+    needs: instrumented-tests
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every device to pass
+        env:
+          RESULT: ${{ needs.instrumented-tests.result }}
+        run: |
+          if [ "$RESULT" != "success" ]; then
+            echo "::error title=Instrumented tests did not pass::The device jobs ended with: $RESULT"
+            exit 1
+          fi
