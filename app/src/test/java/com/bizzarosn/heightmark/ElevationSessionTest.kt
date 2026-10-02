@@ -503,63 +503,113 @@ class ElevationSessionTest {
     // (14 CFR 25.841), while GNSS reads the aircraft. A climb to cruise moves
     // the cabin about a fifth as far as the aircraft.
 
-    @Test
-    fun `with fixes, a flight's reading follows GNSS and not the cabin`() {
-        val flight = Flight()
-        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
-        flight.leg(1200, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
-        flight.leg(600, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
-        flight.leg(1500, aircraftTo = GROUND_M, cabinTo = GROUND_M)
-        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+    /** Ground, climb to cruise and cruise, with a fix every second. */
+    private fun Journey.flyToCruise() {
+        leg(300, deviceTo = GROUND_M)
+        leg(1200, deviceTo = CRUISE_M, barometerTo = CABIN_CEILING_M)
+        leg(600, deviceTo = CRUISE_M, barometerTo = CABIN_CEILING_M)
+    }
 
-        // A 9 m/s climb outruns a one-second fix cadence by a few seconds
-        assertTrue("worst gap ${flight.worstGapMeters} m", flight.worstGapMeters < 50.0)
+    @Test
+    fun `with fixes, a flight's reading tracks GNSS as closely as without a barometer`() {
+        val flights = listOf(Journey(), Journey(hasBarometer = false))
+        for (flight in flights) {
+            flight.flyToCruise()
+            flight.leg(1500, deviceTo = GROUND_M, barometerTo = GROUND_M)
+            flight.leg(300, deviceTo = GROUND_M)
+        }
+        val (withCabin, withoutBarometer) = flights
+
+        assertTrue(
+            "worst gap ${withCabin.worstGapMeters} m against ${withoutBarometer.worstGapMeters} m",
+            withCabin.worstGapMeters <= withoutBarometer.worstGapMeters + 1.0
+        )
+        assertEquals(GROUND_M, withCabin.session.displayedElevation!!.meters, 5.0)
+    }
+
+    @Test
+    fun `a descent without fixes holds the reading instead of following the cabin`() {
+        val flight = Journey()
+        flight.flyToCruise()
+        // Away from a window: only the barometer sees the descent
+        flight.leg(1500, deviceTo = GROUND_M, barometerTo = GROUND_M, fixes = false)
+
+        assertEquals(CRUISE_M, flight.session.displayedElevation!!.meters, 50.0)
+    }
+
+    @Test
+    fun `after a descent without fixes, the first fixes on the ground replace the cruise height`() {
+        val flight = Journey()
+        flight.flyToCruise()
+        flight.leg(1500, deviceTo = GROUND_M, barometerTo = GROUND_M, fixes = false)
+
+        flight.leg(ElevationService.JUMP_CONFIRM_COUNT, deviceTo = GROUND_M)
+
         assertEquals(GROUND_M, flight.session.displayedElevation!!.meters, 5.0)
     }
 
     @Test
-    fun `after a descent without fixes, the first fixes on the ground replace the cabin's height`() {
-        val flight = Flight()
-        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
-        flight.leg(1200, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
-        flight.leg(600, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
-        // Away from a window: the barometer alone carries the reading down
-        flight.leg(1500, aircraftTo = GROUND_M, cabinTo = GROUND_M, fixes = false)
+    fun `after landing, the barometer moves the reading again`() {
+        val flight = Journey()
+        flight.flyToCruise()
+        flight.leg(1500, deviceTo = GROUND_M, barometerTo = GROUND_M)
+        flight.leg(120, deviceTo = GROUND_M)
+        val landed = flight.session.displayedElevation!!.meters
 
-        flight.leg(ElevationService.JUMP_CONFIRM_COUNT, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+        flight.leg(10, deviceTo = GROUND_M + 3.0, fixes = false)
+        flight.leg(40, deviceTo = GROUND_M + 3.0, fixes = false)
 
-        assertEquals(GROUND_M, flight.session.displayedElevation!!.meters, 5.0)
+        assertEquals(landed + 3.0, flight.session.displayedElevation!!.meters, 0.5)
+    }
+
+    @Test
+    fun `a mountain drive keeps the barometer in use`() {
+        val drive = Journey()
+        drive.leg(300, deviceTo = GROUND_M)
+        drive.leg(1800, deviceTo = GROUND_M + 1_400.0)
+        drive.leg(120, deviceTo = GROUND_M + 1_400.0)
+        val parked = drive.session.displayedElevation!!.meters
+
+        drive.leg(10, deviceTo = GROUND_M + 1_403.0, fixes = false)
+        drive.leg(40, deviceTo = GROUND_M + 1_403.0, fixes = false)
+
+        assertEquals(parked + 3.0, drive.session.displayedElevation!!.meters, 0.5)
     }
 
     /**
-     * A session at the production window size, fed one barometer sample and
-     * (optionally) one fix a second. Starts on the ground.
+     * A session at the production window size, fed one fix (unless a leg
+     * has none) and, when [hasBarometer], one barometer sample a second.
+     * Starts on the ground.
      */
-    private class Flight {
+    private class Journey(private val hasBarometer: Boolean = true) {
         val session = ElevationSession(ElevationService(ElevationService.DEFAULT_WINDOW_SIZE))
         private var second = 0L
-        private var aircraftMeters = GROUND_M
-        private var cabinMeters = GROUND_M
+        private var deviceMeters = GROUND_M
+        private var barometerMeters = GROUND_M
 
-        /** Largest gap between the reading and the aircraft's height after any fix. */
+        /** Largest gap between the reading and the device's height after any fix. */
         var worstGapMeters = 0.0
             private set
 
-        /** Moves aircraft and cabin linearly to the given heights over [seconds]. */
-        fun leg(seconds: Int, aircraftTo: Double, cabinTo: Double, fixes: Boolean = true) {
-            val aircraftFrom = aircraftMeters
-            val cabinFrom = cabinMeters
+        /**
+         * Moves the device linearly to [deviceTo] over [seconds], and the
+         * height the barometer's pressure stands for to [barometerTo]. The
+         * two differ only in a pressurized cabin.
+         */
+        fun leg(seconds: Int, deviceTo: Double, barometerTo: Double = deviceTo, fixes: Boolean = true) {
+            val deviceFrom = deviceMeters
+            val barometerFrom = barometerMeters
             for (i in 1..seconds) {
-                aircraftMeters = aircraftFrom + (aircraftTo - aircraftFrom) * i / seconds
-                cabinMeters = cabinFrom + (cabinTo - cabinFrom) * i / seconds
+                deviceMeters = deviceFrom + (deviceTo - deviceFrom) * i / seconds
+                barometerMeters = barometerFrom + (barometerTo - barometerFrom) * i / seconds
                 val atNanos = second++ * NANOS_PER_SECOND
-                session.onPressure(pressureAt(cabinMeters).toFloat(), atNanos)
+                if (hasBarometer) session.onPressure(pressureAt(barometerMeters).toFloat(), atNanos)
                 if (!fixes) continue
                 val pending = session.offer(
                     TestLocations.fixForAdmission(verticalAccuracy = 5f, atNanos = atNanos)
                 )
-                session.commit(pending!!, Elevation(aircraftMeters, MEAN_SEA_LEVEL))
-                val gap = abs(session.displayedElevation!!.meters - aircraftMeters)
+                session.commit(pending!!, Elevation(deviceMeters, MEAN_SEA_LEVEL))
+                val gap = abs(session.displayedElevation!!.meters - deviceMeters)
                 worstGapMeters = max(worstGapMeters, gap)
             }
         }

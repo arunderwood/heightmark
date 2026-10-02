@@ -21,10 +21,13 @@ import javax.inject.Inject
  *    reading from jumping by that bias at every wake.
  *  - The [odometer]: height carried up or down since tracking began, from
  *    the barometer, with weather left out. Window and pool hold heights
- *    minus the odometer reading at the time, so a fix taken two floors down
+ *    minus [appliedMotionMeters] at the time, so a fix taken two floors down
  *    still measures the same thing as one taken here, and the screen follows
  *    a climb at once instead of waiting for GNSS to notice. On a device
- *    without a barometer the odometer stays at zero.
+ *    without a barometer the odometer stays at zero. The odometer's changes
+ *    count only while [crossCheck] trusts it: in a pressurized cabin the
+ *    barometer reads the cabin, not the aircraft, and the reading holds
+ *    until GNSS returns.
  *
  * A session is folded into the pool when it ends (the radio restarts after a
  * wake, a long background gap or a block) and every [FOLD_INTERVAL_NANOS]
@@ -90,6 +93,18 @@ class ElevationSession @Inject constructor(
         get() = window.snapshot().readingCount
 
     private val odometer = BarometricOdometer()
+    private val crossCheck = BarometerCrossCheck()
+
+    /**
+     * The part of the odometer's height change that counts: the changes it
+     * reported while [crossCheck] trusted it. Window and pool hold heights
+     * minus this, and the screen adds it back.
+     */
+    private var appliedMotionMeters = 0.0
+
+    /** True when the barometer is working and measures the device's height. */
+    private val barometerUsable: Boolean
+        get() = odometer.isTracking && crossCheck.isTrusted
 
     /** Earlier sessions at this height, pooled; null until the first one is folded. */
     private var pool: HeightEstimate? = null
@@ -148,12 +163,20 @@ class ElevationSession @Inject constructor(
         if (datum != null && elevation.datum != datum) {
             pool = null
             flush()
+            crossCheck.clearFixes()
         }
         datum = elevation.datum
+        crossCheck.onFix(
+            atNanos = pending.atNanos,
+            gnssMeters = elevation.meters,
+            sigmaMeters = (accuracyMeters ?: MAX_VERTICAL_ACCURACY_M).toDouble(),
+            barometerMeters = odometer.motionMeters,
+            standardAltitudeMeters = odometer.standardAltitudeMeters
+        )
         val start = windowStartNanos
         if (start != null && pending.atNanos - start >= FOLD_INTERVAL_NANOS) fold()
         if (windowStartNanos == null) windowStartNanos = pending.atNanos
-        window.addElevationReading(elevation.meters - odometer.motionMeters, accuracyMeters)
+        window.addElevationReading(elevation.meters - appliedMotionMeters, accuracyMeters)
         hasFix = true
         if (elevation.datum == ElevationDatum.MEAN_SEA_LEVEL) hasSeaLevelFix = true
         awaitingFreshFix = false
@@ -168,14 +191,18 @@ class ElevationSession @Inject constructor(
      *
      * The weather variance the odometer accrues while moving belongs to the
      * pool: it measures how far the pool's frame may have slipped, so the
-     * next session is weighed against it more heavily.
+     * next session is weighed against it more heavily. While [crossCheck]
+     * distrusts the barometer, neither its height nor its variance counts.
      */
     fun onPressure(pressureHpa: Float, atNanos: Long): Boolean {
+        val motionBefore = odometer.motionMeters
         val varianceBefore = odometer.varianceMeters2
         val moved = odometer.feed(pressureHpa, atNanos)
+        if (!crossCheck.isTrusted) return false
         val added = odometer.varianceMeters2 - varianceBefore
         if (added > 0) pool = pool?.let { it.copy(variance = it.variance + added) }
         if (!moved) return false
+        appliedMotionMeters += odometer.motionMeters - motionBefore
         val before = displayedElevation
         refreshDisplay()
         return displayedElevation != before
@@ -218,17 +245,16 @@ class ElevationSession @Inject constructor(
      * into the pool and a new one starts, so a wake moves the number only as
      * far as the new session's weight allows.
      *
-     * With a working barometer, the odometer has already followed any change
+     * With a usable barometer, the odometer has already followed any change
      * in height. Without one, a wake is the only sign the device may have
      * moved, so the pool's variance grows by [UNTRACKED_WAKE_VARIANCE_M2]; a
      * real move further than that is left for [SessionPool]'s gate to refute.
-     * A [WakeTrigger.PRESSURE_CHANGE] while the odometer is not tracking means
-     * the height changed with nothing to measure by how much, so the pool
-     * goes.
+     * A [WakeTrigger.PRESSURE_CHANGE] without a usable barometer means the
+     * height changed with nothing to measure by how much, so the pool goes.
      */
     fun wake(trigger: WakeTrigger) {
         isIdle = false
-        if (trigger == WakeTrigger.PRESSURE_CHANGE && !odometer.isTracking) {
+        if (trigger == WakeTrigger.PRESSURE_CHANGE && !barometerUsable) {
             pool = null
             flush()
             return
@@ -290,7 +316,7 @@ class ElevationSession @Inject constructor(
      */
     private fun startNewSession() {
         fold()
-        if (!odometer.isTracking) {
+        if (!barometerUsable) {
             pool = pool?.let { it.copy(variance = it.variance + UNTRACKED_WAKE_VARIANCE_M2) }
         }
         epoch++
@@ -334,7 +360,7 @@ class ElevationSession @Inject constructor(
     private fun refreshDisplay() {
         val frame = frameHeight() ?: return
         val datum = datum ?: return
-        displayedElevation = Elevation(frame + odometer.motionMeters, datum)
+        displayedElevation = Elevation(frame + appliedMotionMeters, datum)
     }
 
     /** Discards the averaging window; the cached number stays available, dimmed. */
