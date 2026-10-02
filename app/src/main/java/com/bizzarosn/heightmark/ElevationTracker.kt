@@ -34,8 +34,8 @@ import javax.inject.Inject
  * feeds. It drives the pure policy in [ElevationSession] and publishes a
  * single [ElevationUiState] for hosts to render.
  *
- * A [ViewModel] because the session outlives the view: a rotation no longer
- * restarts the averaging window or re-acquires a fix. The host still owns when
+ * A [ViewModel] because the session outlives the view: a rotation keeps the
+ * averaging window and the fix instead of restarting either. The host owns when
  * tracking may run — [onForeground] and [onBackground] bracket every radio,
  * sensor and receiver this class holds, so nothing keeps drawing power behind
  * a screen the user has left.
