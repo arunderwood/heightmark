@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
 import android.location.LocationListener
@@ -85,6 +86,7 @@ class ElevationTracker @Inject constructor(
     )
 
     private var locationListener: LocationListener? = null
+    private var pressureListener: SensorEventListener? = null
     private var searchTimeoutJob: Job? = null
     private var fixWatchdogJob: Job? = null
 
@@ -151,6 +153,7 @@ class ElevationTracker @Inject constructor(
     fun onForeground() {
         foreground = true
         registerProvidersReceiver()
+        startPressureUpdates()
         if (appContext.hasFineLocationPermission()) {
             session.onResumed(SystemClock.elapsedRealtime())
             stillnessDetector.reset()
@@ -167,6 +170,7 @@ class ElevationTracker @Inject constructor(
         foreground = false
         session.onPaused(SystemClock.elapsedRealtime())
         unregisterProvidersReceiver()
+        stopPressureUpdates()
         detailsSources.stop()
         stopLocationUpdates()
         conversions.stop()
@@ -188,6 +192,23 @@ class ElevationTracker @Inject constructor(
 
     private fun startDetailsSources() {
         detailsSources.start(mainExecutor, viewModelScope, appContext.hasFineLocationPermission())
+    }
+
+    /**
+     * The barometer runs for as long as the screen is up, radio on or off:
+     * [ElevationSession] reads carried height from it, and a gap in it is a
+     * gap in what the session knows about where the device went.
+     */
+    private fun startPressureUpdates() {
+        if (pressureListener != null) return
+        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) { hpa, at ->
+            if (session.onPressure(hpa, at)) publish()
+        }
+    }
+
+    private fun stopPressureUpdates() {
+        pressureListener?.let { sensorManager.unregisterListener(it) }
+        pressureListener = null
     }
 
     private fun startLocationUpdates() {
@@ -301,9 +322,7 @@ class ElevationTracker @Inject constructor(
         if (idleWakeMonitor.isRunning) return
         stopLocationUpdates()
         try {
-            idleWakeMonitor.start(anchor, mainExecutor, viewModelScope) {
-                goActive()
-            }
+            idleWakeMonitor.start(anchor, mainExecutor, viewModelScope, ::goActive)
             session.enterIdle()
             publish()
         } catch (e: SecurityException) {
@@ -312,9 +331,8 @@ class ElevationTracker @Inject constructor(
         }
     }
 
-    private fun goActive() {
-        // The wake fired because the device moved, so the window is stale
-        session.wake()
+    private fun goActive(trigger: WakeTrigger) {
+        session.wake(trigger)
         stillnessDetector.reset()
         startLocationUpdates()
     }
@@ -407,6 +425,7 @@ class ElevationTracker @Inject constructor(
 
     override fun onCleared() {
         unregisterProvidersReceiver()
+        stopPressureUpdates()
         detailsSources.stop()
         stopLocationUpdates()
         conversions.stop()
@@ -420,5 +439,6 @@ class ElevationTracker @Inject constructor(
         private const val SEARCH_TIMEOUT_MS = 30_000L
         private const val UPDATE_INTERVAL_MS = 1_000L
         private const val FIX_WATCHDOG_TIMEOUT_MS = 20_000L
+        private const val PRESSURE_SAMPLING_PERIOD_US = 1_000_000
     }
 }

@@ -58,7 +58,7 @@ class DetailsSourcesController(
             // IdleWakeMonitor samples the same sensor faster to catch elevators
             pressureListener = sensorManager.registerPressureListener(
                 SensorManager.SENSOR_DELAY_UI
-            ) { pressureHpa = it }
+            ) { hpa, _ -> pressureHpa = hpa }
         }
 
         if (tickerJob == null) {

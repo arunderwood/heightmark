@@ -14,7 +14,8 @@ class ReadingStateTest {
         averageMeters = 100.0,
         readingCount = readingCount,
         progress = readingCount.toFloat() / windowSize,
-        settled = settled
+        settled = settled,
+        accuracyMeters = 5.0
     )
 
     @Test
@@ -23,7 +24,7 @@ class ReadingStateTest {
             ReadingState.Acquiring,
             ReadingState.derive(
                 hasFixEver = false, isIdle = true, awaitingFreshFix = true,
-                signalStale = true, snapshot = snapshot(settled = true)
+                signalStale = true, pooled = false, snapshot = snapshot(settled = true)
             )
         )
     }
@@ -34,7 +35,7 @@ class ReadingStateTest {
             ReadingState.Dormant,
             ReadingState.derive(
                 hasFixEver = true, isIdle = true, awaitingFreshFix = false,
-                signalStale = false, snapshot = snapshot(readingCount = 10, settled = true)
+                signalStale = false, pooled = false, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -45,7 +46,7 @@ class ReadingStateTest {
             ReadingState.Dormant,
             ReadingState.derive(
                 hasFixEver = true, isIdle = false, awaitingFreshFix = true,
-                signalStale = false, snapshot = snapshot(readingCount = 0)
+                signalStale = false, pooled = false, snapshot = snapshot(readingCount = 0)
             )
         )
     }
@@ -56,7 +57,7 @@ class ReadingStateTest {
             ReadingState.Dormant,
             ReadingState.derive(
                 hasFixEver = true, isIdle = false, awaitingFreshFix = false,
-                signalStale = true, snapshot = snapshot(readingCount = 10, settled = true)
+                signalStale = true, pooled = false, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -67,7 +68,7 @@ class ReadingStateTest {
             ReadingState.Stable,
             ReadingState.derive(
                 hasFixEver = true, isIdle = false, awaitingFreshFix = false,
-                signalStale = false, snapshot = snapshot(readingCount = 10, settled = true)
+                signalStale = false, pooled = false, snapshot = snapshot(readingCount = 10, settled = true)
             )
         )
     }
@@ -76,9 +77,31 @@ class ReadingStateTest {
     fun `unsettled window is converging with the fill progress`() {
         val state = ReadingState.derive(
             hasFixEver = true, isIdle = false, awaitingFreshFix = false,
-            signalStale = false, snapshot = snapshot(readingCount = 3)
+            signalStale = false, pooled = false, snapshot = snapshot(readingCount = 3)
         )
         assertEquals(ReadingState.Converging(0.3f), state)
+    }
+
+    @Test
+    fun `a pooled estimate is stable before its session window settles`() {
+        assertEquals(
+            ReadingState.Stable,
+            ReadingState.derive(
+                hasFixEver = true, isIdle = false, awaitingFreshFix = false,
+                signalStale = false, pooled = true, snapshot = snapshot(readingCount = 1)
+            )
+        )
+    }
+
+    @Test
+    fun `idle beats a pooled estimate`() {
+        assertEquals(
+            ReadingState.Dormant,
+            ReadingState.derive(
+                hasFixEver = true, isIdle = true, awaitingFreshFix = false,
+                signalStale = false, pooled = true, snapshot = snapshot(readingCount = 1)
+            )
+        )
     }
 
     @Test

@@ -20,9 +20,21 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 import javax.inject.Inject
 
+/** What [IdleWakeMonitor] saw that ended the stationary duty cycle. */
+enum class WakeTrigger {
+    SIGNIFICANT_MOTION,
+
+    /** A sustained barometric change: the one trigger that measures a change in height. */
+    PRESSURE_CHANGE,
+
+    /** A passive-provider or fallback-poll fix far enough from the anchor. */
+    LOCATION_FIX
+}
+
 /**
  * Watches for the device leaving a stationary position while the GPS radio is
- * off, and fires [onWake] (once) when it should be turned back on.
+ * off, and fires [onWake] (once), with the [WakeTrigger] that fired, when it
+ * should be turned back on.
  *
  * Wake triggers, each skipped gracefully when the hardware lacks it:
  *  - significant-motion sensor: horizontal movement (walking or driving away).
@@ -38,7 +50,7 @@ class IdleWakeMonitor @Inject constructor(
     private val sensorManager: SensorManager,
     private val pressureDetector: PressureDeltaDetector
 ) {
-    private var onWake: (() -> Unit)? = null
+    private var onWake: ((WakeTrigger) -> Unit)? = null
     private var anchor: Location? = null
 
     private var triggerListener: TriggerEventListener? = null
@@ -55,7 +67,12 @@ class IdleWakeMonitor @Inject constructor(
      * receives location callbacks and [scope] hosts the fallback poll.
      */
     @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-    fun start(anchor: Location, executor: Executor, scope: CoroutineScope, onWake: () -> Unit) {
+    fun start(
+        anchor: Location,
+        executor: Executor,
+        scope: CoroutineScope,
+        onWake: (WakeTrigger) -> Unit
+    ) {
         stop()
         this.anchor = anchor
         this.onWake = onWake
@@ -92,10 +109,10 @@ class IdleWakeMonitor @Inject constructor(
         pollCancellation = null
     }
 
-    private fun wake() {
+    private fun wake(trigger: WakeTrigger) {
         val callback = onWake ?: return
         stop()
-        callback()
+        callback(trigger)
     }
 
     private fun armSignificantMotion() {
@@ -103,7 +120,7 @@ class IdleWakeMonitor @Inject constructor(
         val listener = object : TriggerEventListener() {
             override fun onTrigger(event: TriggerEvent?) {
                 Log.d(TAG, "Significant motion detected")
-                wake()
+                wake(WakeTrigger.SIGNIFICANT_MOTION)
             }
         }
         if (sensorManager.requestTriggerSensor(listener, sensor)) {
@@ -113,10 +130,10 @@ class IdleWakeMonitor @Inject constructor(
 
     /** Returns true if a barometer is present and armed. */
     private fun armBarometer(): Boolean {
-        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) {
-            if (pressureDetector.feed(it)) {
+        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) { pressureHpa, _ ->
+            if (pressureDetector.feed(pressureHpa)) {
                 Log.d(TAG, "Sustained pressure change detected")
-                wake()
+                wake(WakeTrigger.PRESSURE_CHANGE)
             }
         }
         return pressureListener != null
@@ -154,7 +171,7 @@ class IdleWakeMonitor @Inject constructor(
         val anchor = anchor ?: return
         if (IdleWakePolicy.shouldWake(anchor, location)) {
             Log.d(TAG, "Opportunistic fix shows movement")
-            wake()
+            wake(WakeTrigger.LOCATION_FIX)
         }
     }
 

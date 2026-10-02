@@ -24,7 +24,10 @@ sealed interface ReadingState {
         val visualProgress: Float get() = sqrt(progress.coerceIn(0f, 1f))
     }
 
-    /** Window full and tight: the displayed value can be trusted. */
+    /**
+     * The displayed value can be trusted: the window is full and tight, or
+     * the value rests on GNSS sessions pooled earlier.
+     */
     data object Stable : ReadingState
 
     /**
@@ -39,11 +42,12 @@ sealed interface ReadingState {
             isIdle: Boolean,
             awaitingFreshFix: Boolean,
             signalStale: Boolean,
+            pooled: Boolean,
             snapshot: ElevationService.Snapshot
         ): ReadingState = when {
             !hasFixEver -> Acquiring
             isIdle || awaitingFreshFix || signalStale -> Dormant
-            snapshot.settled -> Stable
+            pooled || snapshot.settled -> Stable
             else -> Converging(snapshot.progress)
         }
 

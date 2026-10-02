@@ -10,6 +10,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.pow
 
 class ElevationSessionTest {
 
@@ -20,9 +21,12 @@ class ElevationSessionTest {
     private fun addReading(
         meters: Double,
         verticalAccuracy: Float? = null,
-        datum: ElevationDatum = MEAN_SEA_LEVEL
+        datum: ElevationDatum = MEAN_SEA_LEVEL,
+        atNanos: Long = 0L
     ): Boolean {
-        val pending = session.offer(TestLocations.fixForAdmission(verticalAccuracy = verticalAccuracy))
+        val pending = session.offer(
+            TestLocations.fixForAdmission(verticalAccuracy = verticalAccuracy, atNanos = atNanos)
+        )
         assertNotNull("fix should have been admitted", pending)
         return session.commit(pending!!, Elevation(meters, datum))
     }
@@ -103,7 +107,7 @@ class ElevationSessionTest {
     fun `a fix converted across a wake is dropped`() {
         addReading(100.0)
         val pending = session.offer(TestLocations.fixForAdmission())!!
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
 
         assertFalse(session.commit(pending, Elevation(250.0, MEAN_SEA_LEVEL)))
         assertEquals(0, session.readingCount)
@@ -124,12 +128,11 @@ class ElevationSessionTest {
     }
 
     @Test
-    fun `a fix admitted after a flush commits normally`() {
+    fun `a fix admitted after a wake starts the next session's window`() {
         addReading(100.0)
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
 
         assertTrue(addReading(250.0))
-        assertEquals(250.0, session.displayedElevation!!.meters, 1e-9)
         assertEquals(1, session.readingCount)
     }
 
@@ -223,10 +226,10 @@ class ElevationSessionTest {
     }
 
     @Test
-    fun `waking flushes the window but keeps the last value on screen`() {
+    fun `waking flushes an unsettled window but keeps the last value on screen`() {
         addReading(100.0)
         session.enterIdle()
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
 
         assertFalse(session.isIdle)
         assertEquals(0, session.readingCount)
@@ -251,9 +254,10 @@ class ElevationSessionTest {
         addReading(100.0)
         session.enterIdle()
         session.onBlocked()
-        addReading(250.0)
+        addReading(100.0)
 
-        assertEquals(ReadingState.Converging(1f / WINDOW_SIZE), session.readingState())
+        // Stable, not Converging: the reading rests on the session pooled before the block
+        assertEquals(ReadingState.Stable, session.readingState())
     }
 
     @Test
@@ -268,15 +272,15 @@ class ElevationSessionTest {
     @Test
     fun `the next fix after a wake clears the dormant state`() {
         addReading(100.0)
-        session.wake()
-        addReading(250.0)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+        addReading(100.0)
 
-        assertEquals(ReadingState.Converging(1f / WINDOW_SIZE), session.readingState())
+        assertEquals(ReadingState.Stable, session.readingState())
     }
 
     @Test
     fun `a flush before the first fix leaves the session acquiring`() {
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
 
         assertEquals(ReadingState.Acquiring, session.readingState())
         assertNull(session.displayedElevation)
@@ -292,6 +296,205 @@ class ElevationSessionTest {
         assertEquals(ReadingState.Stable, session.readingState())
     }
 
+    // ---- Pooling sessions ----
+
+    @Test
+    fun `a wake keeps the last session on screen until fresh fixes land`() {
+        settleAt(100.0)
+        session.enterIdle()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+        assertEquals(ReadingState.Dormant, session.readingState())
+        assertEquals(0, session.readingCount)
+    }
+
+    @Test
+    fun `the next session is pooled with the last instead of replacing it`() {
+        startBarometer()
+        settleAt(100.0)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+
+        // Equal session variances: the pool moves halfway, not all the way
+        addReading(91.0, verticalAccuracy = 2f)
+        assertEquals(95.5, session.displayedElevation!!.meters, 1e-9)
+        assertEquals(ReadingState.Stable, session.readingState())
+    }
+
+    @Test
+    fun `pooled sessions converge on their mean`() {
+        startBarometer()
+        // Three desk sessions on one phone that never moved
+        listOf(115.1, 106.0, 112.0).forEach { height ->
+            settleAt(height)
+            session.enterIdle()
+            session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+        }
+
+        assertEquals(111.033, session.displayedElevation!!.meters, 0.001)
+    }
+
+    @Test
+    fun `a loose fix barely moves the pool`() {
+        startBarometer()
+        settleAt(100.0)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+
+        // A first fix after restart reporting 20 m is weighed as such
+        addReading(80.0, verticalAccuracy = 20f)
+        // pool R = (0.95 x 5)^2, session R = (0.95 x 20)^2: gain 1/17
+        assertEquals(98.824, session.displayedElevation!!.meters, 0.001)
+    }
+
+    @Test
+    fun `without a barometer a wake loosens the pool`() {
+        settleAt(100.0)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+
+        addReading(91.0, verticalAccuracy = 2f)
+        // The pool's variance grew by a floor squared, so the session weighs more
+        val r = (SessionPool.SESSION_ERROR_FRACTION * SessionPool.SESSION_SIGMA_FLOOR_M).let { it * it }
+        val p = r + ElevationSession.UNTRACKED_WAKE_VARIANCE_M2
+        assertEquals(100.0 - 9.0 * p / (p + r), session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a session far from the pool waits for confirming readings, then replaces it`() {
+        startBarometer()
+        settleAt(100.0)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+
+        addReading(150.0, verticalAccuracy = 2f)
+        addReading(150.0, verticalAccuracy = 2f)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+
+        addReading(150.0, verticalAccuracy = 2f)
+        assertEquals(150.0, session.displayedElevation!!.meters, 1e-9)
+
+        // And it is the pool from then on
+        session.enterIdle()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+        assertEquals(150.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a long session folds a window into the pool every interval`() {
+        startBarometer()
+        settleAt(100.0)
+
+        assertTrue(addReading(90.0, verticalAccuracy = 2f, atNanos = ElevationSession.FOLD_INTERVAL_NANOS))
+        assertEquals(1, session.readingCount)
+        assertEquals(95.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a pressure wake without a barometer reading discards the pool`() {
+        settleAt(100.0)
+        session.enterIdle()
+        session.wake(WakeTrigger.PRESSURE_CHANGE)
+
+        assertEquals(0, session.readingCount)
+        addReading(91.0, verticalAccuracy = 2f)
+        assertEquals(91.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a pressure wake with a tracking barometer keeps the pool`() {
+        startBarometer()
+        settleAt(100.0)
+        session.enterIdle()
+        session.wake(WakeTrigger.PRESSURE_CHANGE)
+
+        addReading(91.0, verticalAccuracy = 2f)
+        assertEquals(95.5, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a fix converted across a wake never reaches the pool`() {
+        settleAt(100.0)
+        val pending = session.offer(TestLocations.fixForAdmission())!!
+        session.wake(WakeTrigger.LOCATION_FIX)
+
+        assertFalse(session.commit(pending, Elevation(250.0, MEAN_SEA_LEVEL)))
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `blocking an idle session pools the next one`() {
+        startBarometer()
+        settleAt(100.0)
+        session.enterIdle()
+        session.onBlocked()
+
+        assertFalse(session.isIdle)
+        addReading(91.0, verticalAccuracy = 2f)
+        assertEquals(95.5, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `a long background gap pools the next session`() {
+        startBarometer()
+        settleAt(100.0)
+        session.onPaused(0L)
+        session.onResumed(RESET_AFTER_GAP_MS + 1)
+
+        assertEquals(ReadingState.Dormant, session.readingState())
+        addReading(91.0, verticalAccuracy = 2f)
+        assertEquals(95.5, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `an ellipsoid fix after a long gap replaces a sea-level pool`() {
+        settleAt(100.0)
+        session.onPaused(0L)
+        session.onResumed(RESET_AFTER_GAP_MS + 1)
+
+        // The pool cannot be weighed against another datum, and with the latch
+        // cleared the ellipsoid window is the recovery path
+        assertTrue(addReading(50.0, datum = ELLIPSOID))
+        assertEquals(1, session.readingCount)
+        assertEquals(Elevation(50.0, ELLIPSOID), session.displayedElevation)
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
+        assertEquals(Elevation(50.0, ELLIPSOID), session.displayedElevation)
+    }
+
+    // ---- Barometer ----
+
+    @Test
+    fun `a climb moves the reading as the barometer sees it`() {
+        startBarometer()
+        settleAt(100.0)
+        session.enterIdle()
+
+        climb(3.0)
+
+        assertEquals(103.0, session.displayedElevation!!.meters, 0.01)
+    }
+
+    @Test
+    fun `fixes after a climb pool against the same session`() {
+        startBarometer()
+        settleAt(100.0)
+        climb(10.0)
+
+        addReading(110.0, verticalAccuracy = 2f)
+        assertEquals(110.0, session.displayedElevation!!.meters, 0.01)
+        assertEquals(WINDOW_SIZE, session.readingCount)
+    }
+
+    @Test
+    fun `weather drift leaves a still reading alone`() {
+        startBarometer()
+        settleAt(100.0)
+        session.enterIdle()
+
+        // A fast-moving front: 3 hPa an hour, about 25 m of apparent descent
+        val start = pressureAt(0.0)
+        repeat(3600) { holdPressure(start + 3.0 * it / 3600, seconds = 1) }
+
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
     // ---- Background-gap policy ----
 
     @Test
@@ -305,7 +508,7 @@ class ElevationSessionTest {
     }
 
     @Test
-    fun `a long background gap flushes the window and keeps the last value`() {
+    fun `a long background gap flushes an unsettled window and keeps the last value`() {
         addReading(100.0)
         session.onPaused(0L)
         session.onResumed(RESET_AFTER_GAP_MS + 1)
@@ -350,13 +553,13 @@ class ElevationSessionTest {
         assertFalse(addReading(50.0, datum = ELLIPSOID))
 
         assertEquals(1, session.readingCount)
-        assertEquals(Elevation(70.0, MEAN_SEA_LEVEL), session.displayedElevation)
+        assertEquals(MEAN_SEA_LEVEL, session.displayedElevation!!.datum)
     }
 
     @Test
     fun `waking does not clear the datum latch`() {
         addReading(100.0)
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
 
         assertFalse(addReading(50.0, datum = ELLIPSOID))
         assertEquals(0, session.readingCount)
@@ -399,7 +602,7 @@ class ElevationSessionTest {
         assertEquals(ReadingState.Dormant, session.readingState())
 
         // The wake's reacquisition must not carry a stale-signal verdict either
-        session.wake()
+        session.wake(WakeTrigger.SIGNIFICANT_MOTION)
         assertFalse(session.signalStale)
     }
 
@@ -413,7 +616,41 @@ class ElevationSessionTest {
         assertEquals(ReadingState.Stable, session.readingState())
     }
 
+    private fun settleAt(meters: Double) {
+        repeat(WINDOW_SIZE) { addReading(meters, verticalAccuracy = 2f) }
+        assertEquals(ReadingState.Stable, session.readingState())
+    }
+
+    private var pressureSecond = 0L
+
+    /** Feeds [hpa] once a second for [seconds], continuing the barometer's clock. */
+    private fun holdPressure(hpa: Double, seconds: Int) {
+        repeat(seconds) { session.onPressure(hpa.toFloat(), pressureSecond++ * NANOS_PER_SECOND) }
+    }
+
+    private var barometerHeight = 0.0
+
+    /** Gives the session a working barometer at a steady pressure. */
+    private fun startBarometer() {
+        holdPressure(pressureAt(barometerHeight), seconds = 31)
+    }
+
+    /** Carries the device up [meters] at 0.3 m/s, then holds until the odometer is still. */
+    private fun climb(meters: Double) {
+        val steps = (meters / 0.3).toInt()
+        repeat(steps) {
+            barometerHeight += meters / steps
+            holdPressure(pressureAt(barometerHeight), seconds = 1)
+        }
+        holdPressure(pressureAt(barometerHeight), seconds = 40)
+    }
+
+    /** International Standard Atmosphere pressure at [heightMeters]. */
+    private fun pressureAt(heightMeters: Double): Double =
+        1013.25 * (1 - heightMeters / 44_330.0).pow(5.255)
+
     private companion object {
+        const val NANOS_PER_SECOND = 1_000_000_000L
         const val WINDOW_SIZE = 3
     }
 }
