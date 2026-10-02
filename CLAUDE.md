@@ -34,15 +34,15 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 - **Idle has one owner.** `ElevationSession.isIdle` is the only record of idleness. Anything that turns GPS on checks it first (`startLocationUpdates()` returns early while idle). `onBlocked()` ends idle with a flush.
 - **Threading.** `ElevationTracker` and `ElevationSession` are main-thread confined.
 - **Conversion lifetime.** `SerialConversion` starts in `startLocationUpdates()` and stops only in `onBackground()`/`onCleared()`, never in `stopLocationUpdates()`. The fix that tips the stillness detector into idle is still converted after the radio is off.
-- **Signal loss.** `onFixWatchdogExpired()` (20 s) forces `Dormant` without discarding the window. A flush discards it.
+- **Signal loss.** `onFixWatchdogExpired()` (timeout: `FIX_WATCHDOG_TIMEOUT_MS`) forces `Dormant` without discarding the window. A flush discards it.
 - **First launch.** The system permission dialog never auto-fires on a true first launch. The blocked screen is the rationale, and `LocationPermissionHandler.requestPermissions()` is the one choke point that marks `hasRequestedLocationPermission`. A returning, permanently denied user gets the silent auto-fire fallback.
 - **Derive-time clock.** `nowElapsedRealtimeNanos` is stamped in `derive()` so a bare fix-age tick is a distinct `StateFlow` value.
-- **Accuracy gate.** Fixes with no altitude or vertical accuracy worse than `MAX_VERTICAL_ACCURACY_M` (50 m) stay out of the average.
+- **Accuracy gate.** Fixes with no altitude or vertical accuracy worse than `MAX_VERTICAL_ACCURACY_M` stay out of the average.
 
 ## Do not
 
 - Add Google Play services or `play-services-location`. The app runs on de-googled AOSP devices and stays F-Droid-eligible. Location uses `LocationManager` with `GPS_PROVIDER` only.
-- Re-add `org.jetbrains.kotlin.android`, a `kotlin` catalog version, or the `android.builtInKotlin` / `android.newDsl` opt-outs. AGP's built-in Kotlin is used, and the standalone plugin calls the legacy variant API that AGP 10 removes.
+- Re-add `org.jetbrains.kotlin.android`, a `kotlin` catalog version, or the `android.builtInKotlin` / `android.newDsl` opt-outs. AGP's built-in Kotlin is used, and the standalone plugin calls the legacy variant API, which AGP has deprecated for removal.
 - Repin the Daemon JVM vendor (`gradle/gradle-daemon-jvm.properties`) to `JETBRAINS`. Android Studio's bundled JBR is not on Gradle's toolchain search path, so every machine and CI job would download a JDK. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version`. Move the three together, and keep `distribution: 'temurin'` in all three `setup-java` steps.
 - Turn the `AppModule` bindings into `@Inject constructor`s (`LocationManager`, `SensorManager`, `AltitudeResolver`, `ElevationService`, `StillnessDetector`, `PressureDeltaDetector`). Their constructors take defaulted tuning values, which Dagger ignores and would try to inject as a `Long` or `Float`. `AltitudeResolver`'s `converter` param is also the `AltitudeResolverTest` seam. `ElevationSession` stays injectable only because its clock is an argument to `onPaused`/`onResumed`, not a constructor parameter.
 - Rotate the sideload signing key. A new signer strands every sideloaded install.
@@ -61,9 +61,9 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 
 ## Build facts
 
-- Compile SDK 37, target 36, min 34. Toolchain is Temurin JDK 21 with Java/Kotlin target 17. AGP and Gradle versions live in `gradle/libs.versions.toml` and `gradle-wrapper.properties`.
+- SDK levels are in `app/build.gradle.kts`. The JDK is pinned in `gradle/gradle-daemon-jvm.properties` and `.tool-versions`. AGP and dependency versions are in `gradle/libs.versions.toml`, and the Gradle version is in `gradle/wrapper/gradle-wrapper.properties`.
 - Debug builds use applicationId suffix `.debug`, so debug and release installs coexist.
-- Local `assembleRelease` is unsigned unless `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` are all set. Local builds default to `versionName "1.0.0-dev"`; override with `-PversionName=1.0.999 -PversionCode=10999`.
+- Local `assembleRelease` is unsigned unless `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` are all set. Local builds default to a `-dev` version; override with `-PversionName=<name> -PversionCode=<code>`.
 - `AndroidManifest.xml` declares `android.hardware.location.gps` as required. This filters Play Store devices.
 
 CI and release rules are in `.claude/rules/ci-and-release.md` and load when Claude reads a file under `.github/workflows/` or `RELEASE_SETUP.md`. Every merge to `main` that passes CI ships a release, so treat a merge as a release. Roll back with `git revert`.

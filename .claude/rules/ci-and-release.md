@@ -15,14 +15,14 @@ Mechanism detail for a single workflow step lives in a YAML comment next to that
 - The release job checks out `workflow_run.head_sha` (the commit CI tested), builds a signed AAB and uploads it to the Play **internal** track. It also builds a sideload APK signed with a dedicated key that must match `EXPECTED_CERT_SHA256`.
 - A separate `publish` job is the only one with write and `id-token` permissions. It attests both files and creates the GitHub release at that SHA.
 - Concurrency group `play-store-release` serializes releases, because Play allows one open edit.
-- Obtainium tracks the GitHub releases with no config: tag `v1.0.N` matches versionName `1.0.N`, and each release has one APK.
+- Obtainium tracks the GitHub releases with no config: tag `v<versionName>` matches versionName, and each release has one APK.
 - The sideload fingerprint appears in `release.yml` and `Readme.md` and must match in both. Never rotate the sideload key.
 - Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Both keystores decode to `$RUNNER_TEMP`, outside the workspace.
 
 ## Versioning
 
-- `versionCode = BASE_CODE + run_number` (`BASE_CODE=10000`). `versionName = VERSION_PREFIX.run_number` (`VERSION_PREFIX="1.0"`). `run_number` is the release workflow's own counter.
-- To bump major or minor, edit `VERSION_PREFIX` and `BASE_CODE` together in `release.yml` (for example `"1.1"` and `11000`).
+- `versionCode = BASE_CODE + run_number` (both defined in `release.yml`). `versionName = VERSION_PREFIX.run_number`. `run_number` is the release workflow's own counter.
+- To bump major or minor, edit `VERSION_PREFIX` and `BASE_CODE` together in `release.yml`, keeping `BASE_CODE` above every versionCode already uploaded to Play.
 
 ## Rollback
 
@@ -45,7 +45,7 @@ Revert on `main` (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a mer
 
 ## Workflow hygiene
 
-- Pin every action to a commit SHA with an exact-version comment (`@<sha> # v7.0.1`). Dependabot updates both.
+- Pin every action to a commit SHA with an exact-version comment (`@<sha> # v<x.y.z>`). Dependabot updates both.
 - Every checkout sets `persist-credentials: false`. `${{ }}` values reach `run:` scripts only through `env:`.
 - Dependabot groups all action bumps into one PR with a 7-day cooldown on both ecosystems, because every merge to `main` publishes a release.
 - Workflow changes must pass `actionlint` and `zizmor` clean. The one `zizmor` ignore (`dangerous-triggers` on `release.yml`) is justified inline.
