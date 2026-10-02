@@ -75,11 +75,6 @@ jobs:
       # without adding their own entries to the repo's 10 GB cache quota.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        # A fixed key lets a restored configuration-cache entry be decrypted;
-        # Gradle's default key is random per runner. Fork and Dependabot PRs
-        # get no secret and simply reconfigure.
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Run lint, tests, and build
         run: |
@@ -110,125 +105,12 @@ jobs:
           retention-days: 7
 
   # No `needs: build-and-test`: this job builds its own APKs, so the two jobs
-  # run side by side. release.yml still waits for both to pass.
+  # run side by side. release.yml still waits for both to pass. The job name
+  # is a required status check in the main ruleset; renaming it blocks merges.
   instrumented-tests:
     name: Instrumented Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-        
-      # Must satisfy toolchainVersion AND toolchainVendor in
-      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
-      # provisions its own. Changing distribution here requires updating that
-      # file too.
-      - name: Set up JDK 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          
-      # The default mode, like build-and-test: writes on main, read-only on PRs.
-      # This job resolves dependencies no other job does, such as the UTP test
-      # runner and its junit-platform artifacts. Without its own main entry,
-      # every run downloads them from Maven Central and fails whenever Central
-      # does.
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        # A fixed key lets a restored configuration-cache entry be decrypted;
-        # Gradle's default key is random per runner. Fork and Dependabot PRs
-        # get no secret and simply reconfigure.
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-
-      - name: Enable KVM group perms
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          
-      - name: Restore AVD cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        id: avd-cache
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: avd-35-${{ runner.os }}-v3-disk2gb
-          restore-keys: |
-            avd-35-${{ runner.os }}-v3-
-            avd-35-
-            
-      - name: Create AVD and generate snapshot for caching
-        if: steps.avd-cache.outputs.cache-hit != 'true'
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          disk-size: 2048M
-          ram-size: 4096M
-          heap-size: 512M
-          force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
-          disable-animations: false
-          script: echo "Generated AVD snapshot for caching."
-
-      # Only main saves the snapshot. A PR's entry is ~3 GB, no other ref can
-      # restore it, and a few of them evict main's entry from the 10 GB quota.
-      # Saving here, before the tests run, keeps the snapshot clean and saves it
-      # even when a test fails.
-      - name: Save AVD cache
-        if: github.ref == 'refs/heads/main' && steps.avd-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.android/avd/*
-            ~/.android/adb*
-          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
-
-      # Leave out hardware inputs (ram-size, disk-size, ...) and blank cores,
-      # which defaults to 2. The action appends them to config.ini on every
-      # launch; a duplicate makes the emulator reject the snapshot and cold
-      # boot. The AVD already has them from the step that created it.
-      - name: Run instrumented tests
-        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          cores: ''
-          force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -memory 4096
-          disable-animations: true
-          script: ./gradlew connectedDebugAndroidTest
-          
-      - name: Upload instrumented test reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: instrumented-test-reports
-          # androidTest-results holds each test's logcat.
-          path: |
-            app/build/reports/androidTests/
-            app/build/outputs/androidTest-results/
-          retention-days: 7
-
-  # Trial of Gradle Managed Devices (GMD) as a replacement for the
-  # instrumented-tests job: the same tests on the pixel8proapi35 device from
-  # app/build.gradle.kts, so the two jobs can be compared for time and
-  # reliability. Job-level continue-on-error keeps a failure here out of the
-  # run's conclusion, so this job cannot block release.yml.
-  managed-device-tests:
-    name: Instrumented Tests (Managed Device trial)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    continue-on-error: true
     permissions:
       contents: read
     env:
@@ -250,13 +132,13 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # The default mode, like build-and-test: writes on main, read-only on PRs.
+      # This job resolves dependencies no other job does, such as the UTP test
+      # runner and its junit-platform artifacts. Without its own main entry,
+      # every run downloads them from Maven Central and fails whenever Central
+      # does.
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-        # A fixed key lets a restored configuration-cache entry be decrypted;
-        # Gradle's default key is random per runner. Fork and Dependabot PRs
-        # get no secret and simply reconfigure.
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Enable KVM group perms
         run: |
@@ -264,9 +146,10 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      # GMD keeps its AVDs and their default_boot snapshots here. Lock files
-      # and the active-device registry describe the emulator that wrote them;
-      # restored on another runner they make GMD treat the device as in use.
+      # Gradle Managed Devices keep their AVDs and default_boot snapshots here.
+      # Lock files and the active-device registry describe the emulator that
+      # wrote them; restored on another runner they make GMD treat the device
+      # as in use.
       - name: Restore managed device cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: gmd-cache
@@ -285,8 +168,8 @@ jobs:
         if: steps.gmd-cache.outputs.cache-hit != 'true'
         run: ./gradlew pixel8proapi35Setup "$GMD_GPU"
 
-      # Main only, like the AVD cache above: a PR's entry can't be restored by
-      # any other ref and pushes main's out of the 10 GB quota.
+      # Only main saves the device. A PR's entry (~1.3 GB) can't be restored by
+      # any other ref, and a few of them evict main's from the 10 GB quota.
       - name: Save managed device cache
         if: github.ref == 'refs/heads/main' && steps.gmd-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -300,10 +183,13 @@ jobs:
       - name: Run instrumented tests
         run: ./gradlew pixel8proapi35DebugAndroidTest "$GMD_GPU"
 
-      - name: Upload managed device test reports
+      - name: Upload instrumented test reports
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: managed-device-test-reports
-          path: app/build/reports/androidTests/managedDevice/
+          name: instrumented-test-reports
+          # androidTest-results holds each test's logcat.
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
           retention-days: 7
