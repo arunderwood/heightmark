@@ -15,7 +15,8 @@ data class HeightEstimate(val meters: Double, val variance: Double)
  * roughly 1/√(sessions), so each session enters here as a single
  * measurement, weighted against everything pooled before it. This is a
  * one-state Kalman update: the pooled estimate's variance shrinks with every
- * session, and later sessions move the number less and less.
+ * session, and later sessions move the number less and less, down to
+ * [POOL_VARIANCE_FLOOR_M2].
  *
  * A session that disagrees by more than [GATE_SIGMA] combined standard
  * deviations is not this height. Over at least [MIN_REFUTING_READINGS]
@@ -55,7 +56,10 @@ object SessionPool {
         }
         val gain = pool.variance / spread
         return Verdict.Pooled(
-            HeightEstimate(pool.meters + gain * innovation, (1 - gain) * pool.variance)
+            HeightEstimate(
+                pool.meters + gain * innovation,
+                max((1 - gain) * pool.variance, POOL_VARIANCE_FLOOR_M2)
+            )
         )
     }
 
@@ -67,6 +71,15 @@ object SessionPool {
      * errors correlated over about 240 s: 1/√(1 + 30/240).
      */
     const val SESSION_ERROR_FRACTION = 0.95
+
+    /**
+     * The pool never claims better than ±2 m. Handset and site bias do not
+     * pool away below that, and a pool that claimed less would give every
+     * later session almost no weight, so an offset the barometer got wrong
+     * would never be corrected. At this floor a session keeps about 15% of
+     * the weight, and such an offset fades within about six sessions.
+     */
+    const val POOL_VARIANCE_FLOOR_M2 = 4.0
 
     const val GATE_SIGMA = 3.0
 

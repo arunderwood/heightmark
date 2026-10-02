@@ -30,9 +30,9 @@ import javax.inject.Inject
 
 /**
  * The tracking session's Android shell: the GNSS listener registration, the
- * stationary duty cycle, the geoid conversion, the search timeout, the
- * fix-age watchdog, the location-provider broadcast, and the panel-only
- * feeds. It drives the pure policy in [ElevationSession] and publishes a
+ * barometer listener, the stationary duty cycle, the geoid conversion, the
+ * search timeout, the fix-age watchdog, the location-provider broadcast, and
+ * the panel-only feeds. It drives the pure policy in [ElevationSession] and publishes a
  * single [ElevationUiState] for hosts to render.
  *
  * A [ViewModel] because the session outlives the view: a rotation keeps the
@@ -42,8 +42,9 @@ import javax.inject.Inject
  * a screen the user has left.
  *
  * Confined to the main thread, like the [ElevationSession] it drives: location
- * callbacks are delivered on the main executor and the conversion coroutine
- * resumes there, so none of the state is synchronized.
+ * callbacks are delivered on the main executor, barometer samples on the main
+ * looper, and the conversion coroutine resumes there, so none of the state is
+ * synchronized.
  */
 @HiltViewModel
 class ElevationTracker @Inject constructor(

@@ -39,6 +39,20 @@ class SessionPoolTest {
     }
 
     @Test
+    fun `pooling never claims better than the variance floor`() {
+        val verdict = SessionPool.weigh(
+            pool = HeightEstimate(100.0, variance = SessionPool.POOL_VARIANCE_FLOOR_M2),
+            session = HeightEstimate(91.0, variance = 22.5625),
+            sessionReadings = 30
+        )
+
+        val pooled = (verdict as SessionPool.Verdict.Pooled).estimate
+        assertEquals(SessionPool.POOL_VARIANCE_FLOOR_M2, pooled.variance, 0.0)
+        // The session still carries its share: 4 / 26.5625 of the 9 m gap
+        assertEquals(98.645, pooled.meters, 0.001)
+    }
+
+    @Test
     fun `a session beyond the gate refutes the pool once it has enough readings`() {
         val pool = HeightEstimate(100.0, variance = 16.0)
         // Combined SD 5 m: 3 SD is 15 m
