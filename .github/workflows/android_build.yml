@@ -15,6 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # setup-gradle caches ~/.gradle/caches but not the project's
+  # .gradle/configuration-cache, so every run reconfigures (about 10-16 s per
+  # job). The flag is set here and not in release.yml, whose configuration
+  # would write the signing secrets into the cache entry.
   GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.parallel=true -Dorg.gradle.caching=true -Dkotlin.incremental=false -Dorg.gradle.configuration-cache=true
 
 jobs:
@@ -151,6 +155,10 @@ jobs:
       # before any test has run. On a hit, the test task's own setup dependency
       # checks the restored device, and skipping this step saves a Gradle
       # start-up and configuration pass.
+      #
+      # On x86_64 hosts the setup task logs "does not specify a testedAbi".
+      # The warning is spurious: that task never receives the DSL value, while
+      # the test runner reads it.
       #
       # The emulator keeps writing to the AVD for a few seconds after the
       # Gradle task returns, and tar fails the save when a file changes or

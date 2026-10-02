@@ -1,190 +1,69 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+HeightMark is a single-screen Android app that shows the user's elevation from GPS, with a metric/imperial toggle and a diagnostic details panel. Class-level behavior is in each file's KDoc; this file holds what the code does not say.
 
-## Project Overview
-
-HeightMark is a simple Android app that displays the user's current elevation/altitude. It uses GPS location services to determine elevation and provides a clean interface with metric/imperial unit switching.
-
-## Build Commands
+## Commands
 
 ```bash
-# Build the project (unit tests + lint + APKs)
-./gradlew build
-
-# Build debug APK
+./gradlew build                     # unit tests + lint + APKs
 ./gradlew assembleDebug
-
-# Run unit tests
 ./gradlew test
-
-# Run a single unit test class (append .methodName for one method;
-# most test methods use backtick names, so quote them)
+# One class; append .methodName for one method (backtick names need quoting)
 ./gradlew testDebugUnitTest --tests "com.bizzarosn.heightmark.ElevationServiceTest"
-
-# Run instrumented tests (requires connected device/emulator)
-./gradlew connectedAndroidTest
-
-# Run a single instrumented test class
+./gradlew lintDebug                 # Accessibility category is error severity (app/lint.xml)
+./gradlew connectedAndroidTest      # needs a device or emulator
 ./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.bizzarosn.heightmark.StartupCrashTest
-
-# Run instrumented tests on the Gradle Managed Device (no running emulator needed;
-# AGP downloads the API 35 aosp-atd image, boots it headless, and tears it down)
-./gradlew pixel8proapi35DebugAndroidTest
-
-# Lint (Accessibility category is promoted to error severity — see app/lint.xml)
-./gradlew lintDebug
-
-# Clean build
-./gradlew clean
+./gradlew pixel8proapi35DebugAndroidTest   # Gradle Managed Device, no emulator needed
 ```
 
-## Architecture
+## Architecture map
 
-The app is a single screen (`ElevationFragment`) plus a set of focused collaborator classes:
+- `ElevationFragment` is a renderer. It maps `ElevationUiState` to views and decides nothing about what a reading is worth.
+- `ElevationTracker` (`@HiltViewModel`) is the Android shell: GNSS, duty cycle, geoid conversion, watchdog, receivers. It drives `ElevationSession` and publishes `StateFlow<ElevationUiState>`.
+- `ElevationSession` is the pure-JVM domain policy: fix admission, datum policy, duty-cycle flags, epoch guard against a conversion racing a flush. It takes the clock as an argument.
+- `ElevationService` is the rolling average with jump re-anchoring.
+- `ElevationUiState.derive()` is the only place screen state is decided.
+- `ReadingState` (Acquiring / Converging / Stable / Dormant) drives the settling line and `heroAlpha`.
+- `SerialConversion` feeds fixes through the geoid conversion in order. `AltitudeResolver.resolve` is `@Synchronized`, which serializes calls but does not order them, so ordering comes from the single consumer.
+- `IdleWakeMonitor` and `IdleWakePolicy` wake the app while GPS is off. `StillnessDetector` and `PressureDeltaDetector` feed the duty cycle.
+- `LengthFormatter` holds the one metric/imperial branch. `LocationPermissionPolicy` is the permission decision table.
 
-- **HeightMarkApplication**: `@HiltAndroidApp` Application; applies Material `DynamicColors` to all activities
-- **MainActivity**: `@AndroidEntryPoint` entry point; splash screen (`installSplashScreen`), `enableEdgeToEdge`, `activity_main.xml` holds only a `FragmentContainerView` whose `android:name` is `ElevationFragment` (no Navigation Component). There is no bottom navigation; the fragment's content container absorbs the navigation-bar inset itself
-- **ElevationFragment**: The app's one screen, and only a renderer — it holds the views, the two toggles and their persistence, the permission handler's launcher, and the dialogs. It collects an already-derived `ElevationUiState` (via `repeatOnLifecycle(STARTED)`) and maps it to views; it decides nothing about what the reading is worth
-- **ElevationTracker**: The tracking session's Android shell, a `@HiltViewModel` — GNSS listener registration, the stationary duty cycle, the geoid conversion, the search timeout, the fix-age watchdog, the `PROVIDERS_CHANGED` receiver, and the panel-only feeds. Drives `ElevationSession` and publishes a `StateFlow<ElevationUiState>`. Being a ViewModel, it outlives a rotation, so a configuration change keeps the averaging window and the fix; `onForeground()`/`onBackground()` bracket every radio, sensor and receiver it holds, so nothing draws power behind a screen the user has left. Main-thread confined, like the session it drives. The fix-age watchdog is a `viewModelScope` timer reset on every committed fix and on `startLocationUpdates()`; if it lapses (20s — well past a normal single-fix gap, short enough that a signal-blocking building doesn't leave a stale "stable" reading on screen for long) it tells `ElevationSession` the signal has gone stale, which the details panel reports as "GPS: no signal" to distinguish it from the deliberate stationary duty cycle ("GPS: idle (stationary)")
-- **SerialConversion**: Generic one-consumer pipeline the tracker pushes fixes through for the geoid conversion. A conflated `Channel` drained by one coroutine, so conversions never overlap and results never reorder; while a conversion runs, only the newest waiting fix is kept. `AltitudeResolver.resolve` is `@Synchronized`, which serializes calls but does not order them (JVM monitors are not FIFO), so ordering has to come from the single consumer. The tracker starts it in `startLocationUpdates()` and stops it only in `onBackground()`/`onCleared()`, not in `stopLocationUpdates()`: the fix that tips the stillness detector into `goIdle` is still converted after the radio is off. `stop()` discards the waiting fix and the in-flight result
-- **ElevationUiState**: What the screen shows, built by one pure `derive()` so the hero number, the settling line and the location-services prompt can never disagree. Holds `Hero` (Status/Value), a `Blocked` reason table (only `LocationServicesOff` offers a settings prompt), and `DetailsFacts` for the panel. A block outranks even a good reading, because that reading is no longer being kept current. `nowElapsedRealtimeNanos` is stamped at derive time on purpose: it is what makes a bare fix-age tick a distinct state instead of one the `StateFlow` deduplicates away
-- **DetailsPanelPresenter**: Pure-JVM builder for the diagnostic panel's lines; takes an `Input` snapshot (including the clock, so it stays JVM-testable) and returns `Row`s of `@StringRes` + args for the fragment to resolve
-- **DetailsSourcesController**: Registers and releases the panel-only feeds (GNSS satellite counts, barometer, 1 Hz fix-age ticker). Each source arms independently so one that could not start — usually the GNSS callback, which needs fine location — is retried on the next `start()`; `stop()` deliberately keeps the last-known values
-- **ElevationService**: Rolling average of elevation readings with jump re-anchoring — sustained same-side outliers (elevator, stairs) flush and re-seed the window so the display snaps to the new level; exposes a `Snapshot` with window fill progress and a latched `settled` flag
-- **ElevationSession**: The tracking session's domain policy, pure JVM — which fixes are worth averaging (altitude present, vertical accuracy within `MAX_VERTICAL_ACCURACY_M`), which *datum* may reach the average (see below), the duty-cycle flags, the epoch that drops a geoid conversion racing a window flush, the background-gap reset, and the last value held on screen across a flush. The background-gap reset also clears the "sea level measured this session" latch, so a permanently broken geoid conversion can recover into the ellipsoid degraded mode rather than dropping fixes forever; the far more frequent duty-cycle `wake()` flush shares the same window reset but deliberately leaves that latch alone. Takes the clock as an input rather than calling `SystemClock`, following `DetailsPanelPresenter`. `onFixWatchdogExpired()` records that `ElevationTracker`'s timer lapsed; unlike a flush this does not discard the averaging window — the outage is usually brief enough (elevator lobby, parking garage) that the same reading is still right once fixes resume — it only forces `ReadingState.Dormant` until the next fix commits and clears it
-- **Elevation / ElevationDatum**: A height in meters plus the surface it was measured from (`MEAN_SEA_LEVEL` / `ELLIPSOID`). The two differ by the local geoid separation — ~-30 m across most of North America — so the pair travels together from `AltitudeResolver` through `ElevationSession` to `Hero.Value`, and no code path can pass an unconverted fallback off as sea level
-- **ReadingState**: Sealed interface (Acquiring / Converging / Stable / Dormant) derived from tracking flags and the averaging window; reaches the screen through `ElevationUiState`, driving the settling line, and owns the state → hero-opacity mapping (`heroAlpha`, `DIMMED_TEXT_ALPHA`)
-- **StabilityLineView**: The "settling line" — a canvas-drawn kinetic line under the elevation number: traveling wave while acquiring, flattening/brightening core while converging, breathing glow when stable, motionless dotted line (with dimmed number) when the reading is dormant/stale
-- **AltitudeResolver**: Converts WGS84 ellipsoid altitude to Mean Sea Level via the platform `AltitudeConverter` (API 34, offline geoid data); falls back to ellipsoid height if geoid data fails to load. Returns an `Elevation` — value plus datum — never a bare Double: all three failure paths (IOException, IllegalArgumentException, and a call that returns without populating `hasMslAltitude()`) produce a number that is *not* sea level, and only the tag tells them apart
-- **StillnessDetector**: Declares the device stationary from GNSS fix speed/drift over a 30s window
-- **IdleWakeMonitor**: While GPS is off, wakes on significant motion, sustained barometric pressure change (elevators), passive fixes, or a fallback poll (barometer-less devices only)
-- **IdleWakePolicy**: Pure-JVM accuracy-gated decision on whether a passive-provider or fallback-poll fix proves the device moved while `IdleWakeMonitor` is idle. A fix with no accuracy report, or one worse than the gate, proves nothing on that axis, and a fix that passes must still beat the drift threshold plus its own accuracy radius. A false wake self-corrects once the GPS radio confirms nothing moved, so it leans toward rejecting the fix
-- **PressureDeltaDetector**: Sustained-pressure-change detection with weather-drift absorption and HVAC/door-transient rejection
-- **LocationPermissionHandler**: Lifecycle-aware permission handler with state management, including the Android 12+ coarse-only ("approximate") grant state. Its file also holds the top-level `Context.hasFineLocationPermission()` that both it and `ElevationTracker` gate on
-- **PreferencesRepository**: DataStore-based persistence for user preferences (metric/imperial units, details panel, whether the location-permission dialog has ever been requested)
-- **LengthFormatter**: The single home of the metric/imperial branch — value conversion, number formatting, and unit-resource selection. Returns resource IDs for callers to resolve: `Detail` for a panel row, `Hero` for the big number, each pairing a value with the unit that names it
-- **LocationPermissionPolicy**: Pure decision table mapping grant state to a `Resolution` (report a state, show a dialog, or re-request)
-- **UnitConverter**: `object` holding `FEET_PER_METER` and `metersToFeet()`
-- **LocationAccuracy.kt / SensorListeners.kt**: Top-level extension helpers — nullable accuracy accessors; a `SensorEventListener` from a single lambda, and `registerPressureListener` for the barometer arming both `IdleWakeMonitor` and `DetailsSourcesController` need
+## Invariants
 
-### Dependency Injection
+- **Datum.** One averaging window never mixes `MEAN_SEA_LEVEL` and `ELLIPSOID` heights. `Elevation` carries its datum from `AltitudeResolver` to the hero number, so an unconverted fallback can never pass as sea level. Once a fix converts to MSL, later ellipsoid fixes are dropped. A device that never converts averages ellipsoid heights and labels them so. The ellipsoid → MSL switch flushes the window. A background-gap reset clears the "sea level measured" latch; a duty-cycle `wake()` flushes but keeps it.
+- **Idle has one owner.** `ElevationSession.isIdle` is the only record of idleness. Anything that turns GPS on checks it first (`startLocationUpdates()` returns early while idle). `onBlocked()` ends idle with a flush.
+- **Threading.** `ElevationTracker` and `ElevationSession` are main-thread confined.
+- **Conversion lifetime.** `SerialConversion` starts in `startLocationUpdates()` and stops only in `onBackground()`/`onCleared()`, never in `stopLocationUpdates()`. The fix that tips the stillness detector into idle is still converted after the radio is off.
+- **Signal loss.** `onFixWatchdogExpired()` (20 s) forces `Dormant` without discarding the window. A flush discards it.
+- **First launch.** The system permission dialog never auto-fires on a true first launch. The blocked screen is the rationale, and `LocationPermissionHandler.requestPermissions()` is the one choke point that marks `hasRequestedLocationPermission`. A returning, permanently denied user gets the silent auto-fire fallback.
+- **Derive-time clock.** `nowElapsedRealtimeNanos` is stamped in `derive()` so a bare fix-age tick is a distinct `StateFlow` value.
+- **Accuracy gate.** Fixes with no altitude or vertical accuracy worse than `MAX_VERTICAL_ACCURACY_M` (50 m) stay out of the average.
 
-The app uses **Hilt**. `PreferencesRepository` (`@Singleton`), `IdleWakeMonitor`, and `ElevationSession` carry `@Inject constructor`. **AppModule** (`di/AppModule.kt`, `SingletonComponent`) holds only the bindings Dagger cannot derive:
-- Singletons: `LocationManager`, `SensorManager` (both via `getSystemService`), `AltitudeResolver` (its defaulted `converter` param is the seam `AltitudeResolverTest` injects a fake through)
-- Unscoped: `ElevationService(readingsCount = ElevationService.DEFAULT_WINDOW_SIZE)`, `StillnessDetector`, `PressureDeltaDetector` — all have constructors made entirely of defaulted tuning values, and Dagger ignores Kotlin defaults
+## Do not
 
-Do not "simplify" the remaining five into `@Inject constructor`s; each would either break a test seam or make Dagger try to inject a `Long`/`Float`. `ElevationSession` avoids that trap precisely because its clock is an argument to `onPaused`/`onResumed` rather than a defaulted tuning parameter on the constructor — keep it that way.
-
-`@AndroidEntryPoint` is applied to `MainActivity` and `ElevationFragment`. The fragment `@Inject`s only `PreferencesRepository` and reaches everything else through `ElevationTracker`, a `@HiltViewModel` obtained with `by viewModels()`. The tracker constructor-injects `ElevationSession`, `LocationManager`, `SensorManager`, `AltitudeResolver`, `IdleWakeMonitor` and `StillnessDetector`, alongside `@ApplicationContext`, so the fragment holds no tracking state that a rotation would destroy. `LocationPermissionHandler` is constructed directly in the fragment, because its `ActivityResultLauncher` needs the Fragment; `DetailsSourcesController` is constructed in the tracker. Plain `by viewModels()` in an `@AndroidEntryPoint` fragment resolves through Hilt's generated factory, so `androidx.hilt:hilt-navigation-fragment` is not needed.
-
-### Permission Handling
-
-- **LocationPermissionState**: Sealed class with states Granted, CoarseOnly, PermanentlyDenied, RequiresRationale, NotYetRequested
-- **Lifecycle-aware**: Automatically cleans up dialogs and resources when fragment is destroyed
-- **Multiple permissions**: Handles both ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; coarse-only grants get an in-context precise-location upgrade prompt because GPS requires fine
-- **First launch**: On a true first launch the system permission dialog is not auto-fired. `LocationPermissionPolicy.resolve` takes a `hasRequestedBefore` input — backed by `PreferencesRepository.hasRequestedLocationPermission`, since the distinction must survive process death — that separates "never asked" from "asked before and now stuck at a rationale-less denial" (Android's `shouldShowRequestPermissionRationale` returns false for both). A true first launch resolves to `NotYetRequested`, which renders the same blocked screen as `RequiresRationale` (`Blocked.PermissionRequired`, "Location permission is needed to show your elevation." + Grant Permission button) but with no dialog at all — the blocked message is the up-front rationale, and the user triggers the system dialog themselves via the persistent button. `LocationPermissionHandler.requestPermissions()` is the single choke point that marks the flag, since every request path (the auto-fire fallback, each dialog's positive button, and the blocked screen's button) funnels through it. A returning user who is already permanently denied gets the auto-fire fallback: the policy returns `RequestPermissions`, and the system silently re-denies, which resolves to `PermanentlyDenied`. This path needs no dialog because the user has already seen the system prompt.
-
-## Key Technical Details
-
-- **Compile SDK**: 37, **Target SDK**: 36, **Minimum SDK**: 34 (Android 14)
-- **Toolchain**: JDK 21 (Temurin), Java/Kotlin target 17. The AGP version is `agp` in `gradle/libs.versions.toml` and the Gradle version is `distributionUrl` in `gradle/wrapper/gradle-wrapper.properties`; Dependabot bumps both, so this file does not repeat them
-- **Kotlin**: compiled through AGP's **built-in Kotlin support** — there is no `org.jetbrains.kotlin.android` plugin and no `kotlin` version in the catalog, so the Kotlin version is whatever KGP the AGP version bundles and moves with AGP. `./gradlew buildEnvironment | grep kotlin-gradle-plugin` shows the current one. Do not re-add the plugin or the `android.builtInKotlin` / `android.newDsl` opt-outs: applying the standalone plugin makes it call the legacy variant API, and every one of those calls is a deprecation that AGP 10 removes outright. `ksp` is still pinned in the catalog and is bumped by Dependabot independently.
-- **JDK selection**: the Gradle daemon JVM is pinned by Daemon JVM criteria in `gradle/gradle-daemon-jvm.properties` (`toolchainVendor=ADOPTIUM`, `toolchainVersion=21`), so IDE, CLI, and CI builds all run on Temurin 21. `.tool-versions` pins the local install, and CI's three `setup-java` steps must keep `distribution: 'temurin'` to satisfy the vendor pin. Do **not** repin the vendor to `JETBRAINS` — Android Studio's bundled JBR lives inside the app bundle, which Gradle's toolchain auto-detection does not scan, so that pin forces a JDK download on every machine and every CI job. Android Studio still *boots* on its bundled JBR through a separate mechanism (`STUDIO_JDK` / the `jbr` directory); the criteria file has no effect on the IDE runtime. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version` — move those three by hand, together.
-- **Dependency Injection**: Hilt with KSP (versions in `gradle/libs.versions.toml`)
-- **Architecture Components**: DataStore Preferences, Lifecycle ViewModel (`ElevationTracker`)
-- **Location**: Uses the platform `LocationManager` with GPS_PROVIDER only — **deliberately no Google Play services / play-services-location dependency**, so the app runs identically on certified and de-googled AOSP devices (GrapheneOS, LineageOS, etc.) and stays F-Droid-eligible. Do not introduce GMS dependencies.
-- **Altitude**: Every fix is converted from WGS84 ellipsoid height to Mean Sea Level via the platform `AltitudeConverter`; fixes without altitude or with vertical accuracy worse than 50 m are excluded from the rolling average
-- **Datum**: One averaging window never mixes datums. Once a fix has converted to MSL this session, later unconverted fallbacks are dropped rather than averaged in (at 1 Hz, a dropped fix costs a second of freshness; mixing costs the geoid separation). A device that can never convert averages ellipsoid heights consistently, and says so — the hero's label reads "Ellipsoid height · no sea-level data" and the details panel names the datum. The one permitted switch, ellipsoid → MSL when geoid data finally loads, flushes the window at the boundary so `ElevationService`'s jump detector never reads a change of surface as a climb. That "sea level measured this session" latch is not permanent: a background-gap reset (see below) clears it too, so a conversion that breaks mid-session or a trip somewhere the geoid tiles fail can still recover into the labeled ellipsoid mode instead of dropping every fix forever. Duty-cycle wakes flush the averaging window on the same schedule but deliberately leave the latch alone — they are too frequent to reopen the mixing window each time
-- **Power**: GPS duty-cycles off after ~30 s stationary; wake triggers are significant motion, barometer delta (vertical movement), passive-provider fixes, and a 3-minute fallback poll on barometer-less devices
-- **Permissions/Manifest**: Requires ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION; declares `<uses-feature android.hardware.location.gps required="true"/>` (affects Play Store device filtering)
-- **Build variants**: Debug builds use applicationId suffix `.debug` and versionName suffix `-debug`, so debug and release installs coexist
-- **Dependencies**: Managed via version catalog (`gradle/libs.versions.toml`)
-
-## Accessibility Gates
-
-Accessibility is enforced at three layers; all of them fail the build/CI on violation:
-
-1. **Lint**: `app/lint.xml` promotes the entire `Accessibility` lint category to `error`, and `lint { abortOnError = true }` in `app/build.gradle.kts`
-2. **Runtime checks**: the custom `HiltTestRunner` globally enables Accessibility Test Framework checks from the root view, so **every Espresso interaction** in every instrumented test validates the full view hierarchy
-3. **Contrast tests**: `ScrimContrastTest` (unit test) computes WCAG 2.1 contrast ratios from constants referenced directly in production source (`ReadingState.DIMMED_TEXT_ALPHA`, `StabilityLineView` alpha constants, `hm_*` color resources). Changing those constants or colors can fail unit tests — that is by design.
-
-## Release Process
-
-### Automatic Releases
-
-Every merge to `main` automatically creates a new release if all quality checks pass.
-
-**Flow:**
-1. PR merged to main → `android_build.yml` ("Android CI") re-runs on main
-2. `release.yml` triggers via `workflow_run` when "Android CI" completes **successfully** for a push to main (not on push directly). A `check-tip` job gates the release: its `if:` requires `workflow_run.event == 'push'` from this repository: the `branches` filter matches the triggering run's *head* branch, so a fork PR from a branch named `main` would otherwise pass it
-3. `check-tip` then releases only `main`'s tip. A commit that `main` has already moved past is skipped with a `::notice::`, because the newer commit's release ships its changes too; releasing it would spend a Play upload, and `GITHUB_TOKEN` may not tag a commit behind `main` once a later merge changed workflow files (HTTP 403). If the newer commit fails CI, the batch waits for the next green merge
-4. Release workflow: checks out `workflow_run.head_sha` (the commit CI tested; the `workflow_run` default is the newest main commit, which may not have passed yet), calculates version from its own `run_number`, builds a signed AAB (`bundleRelease`), uploads to the Play Store **internal** track, and builds a sideload APK (`assembleRelease`) with a **dedicated sideload key** that must match the certificate pinned in `EXPECTED_CERT_SHA256`. A separate `publish` job, the only one with write and `id-token` permissions, attests both files and creates a GitHub release tagged at that same SHA. Both keystores are decoded to `$RUNNER_TEMP`, outside the workspace. Concurrency group `play-store-release` serializes releases (Play API allows one open edit).
-5. Obtainium tracks the GitHub releases with no extra config: tag `v1.0.N` matches versionName `1.0.N`, and each release has one APK. The sideload fingerprint lives in `release.yml` and `Readme.md` and must match in both. Never rotate the sideload key: a new signer strands every sideloaded install. Setup is in `RELEASE_SETUP.md`
-
-Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` env vars (populated from secrets in CI); if any is missing the signing config is left empty and local `assembleRelease`/`bundleRelease` output is unsigned.
-
-### Version Numbering
-
-- **versionCode** (Play Store, must always increase): `BASE_CODE + run_number` with `BASE_CODE=10000`
-- **versionName** (user-visible): `VERSION_PREFIX.run_number` with `VERSION_PREFIX="1.0"`
-- Both are defined in `.github/workflows/release.yml`; `run_number` is the release workflow's own run counter
-- Local builds fall back to `versionCode 4` / `versionName "1.0.0-dev"` unless overridden:
-
-```bash
-./gradlew bundleRelease -PversionName=1.0.999 -PversionCode=10999
-```
-
-To bump major/minor (e.g. v1.1.x or v2.0.x), edit `VERSION_PREFIX` and `BASE_CODE` in `release.yml` (e.g. `"1.1"` / `11000`).
-
-### Rollback
-
-Revert the problematic commit on main (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a merge) and push — a new release is created automatically with the fix.
+- Add Google Play services or `play-services-location`. The app runs on de-googled AOSP devices and stays F-Droid-eligible. Location uses `LocationManager` with `GPS_PROVIDER` only.
+- Re-add `org.jetbrains.kotlin.android`, a `kotlin` catalog version, or the `android.builtInKotlin` / `android.newDsl` opt-outs. AGP's built-in Kotlin is used, and the standalone plugin calls the legacy variant API that AGP 10 removes.
+- Repin the Daemon JVM vendor (`gradle/gradle-daemon-jvm.properties`) to `JETBRAINS`. Android Studio's bundled JBR is not on Gradle's toolchain search path, so every machine and CI job would download a JDK. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version`. Move the three together, and keep `distribution: 'temurin'` in all three `setup-java` steps.
+- Turn the `AppModule` bindings into `@Inject constructor`s (`LocationManager`, `SensorManager`, `AltitudeResolver`, `ElevationService`, `StillnessDetector`, `PressureDeltaDetector`). Their constructors take defaulted tuning values, which Dagger ignores and would try to inject as a `Long` or `Float`. `AltitudeResolver`'s `converter` param is also the `AltitudeResolverTest` seam. `ElevationSession` stays injectable only because its clock is an argument to `onPaused`/`onResumed`, not a constructor parameter.
+- Rotate the sideload signing key. A new signer strands every sideloaded install.
+- Rename the `Instrumented Tests` CI job. It is a required status check in the `main` ruleset.
+- Edit `ScrimContrastTest` to make a failure pass. It reads `ReadingState.DIMMED_TEXT_ALPHA`, the `StabilityLineView` alpha constants and the `hm_*` colors directly, so a contrast failure after changing them is the gate working.
 
 ## Testing
 
-### Unit Tests (`app/src/test/`)
+- Tests assert behavior. Do not test what the compiler guarantees (a constructor exists, a class is not abstract, a sealed `object` equals itself).
+- Shared mockk `Location` factories live in `TestLocations`.
+- Instrumented tests use `@HiltAndroidTest` with `HiltAndroidRule` at `order = 0`, then `GrantPermissionRule`.
+- `HiltTestRunner` enables Accessibility Test Framework checks on every Espresso interaction. Lint, that runner, and `ScrimContrastTest` all fail the build on an accessibility violation.
+- The Android Test Orchestrator runs each test in its own process with `clearPackageData=true`. This isolates runtime permissions. `CoarseLocationPermissionTest` asserts that FINE is not granted. Do not turn that assert into an `assume`, which would skip silently if the isolation broke.
+- Do not put `Thread.sleep` inside `onActivity`. It blocks the looper it waits on. Use `HiltUiTestBase.launchHome()`, whose Espresso check syncs on the looper.
+- `ElevationTracker` has no JVM test. `ElevationFragmentTest` (including the details-panel toggle cycle) plus the `ElevationSession` and `ElevationUiState` suites cover it.
 
-Pure-JVM tests covering the core logic: `ElevationServiceTest` (rolling average, jump re-anchoring, settled latching), `SerialConversionTest` (conversion order, conflation, teardown), `ElevationSessionTest` (fix admission, the datum policy, the epoch guard against a conversion racing a flush, duty-cycle and background-gap policy, the fix-age watchdog), `AltitudeResolverTest` (MSL conversion + the three datum-tagged fallbacks, mocked `AltitudeConverter`), `DetailsPanelPresenterTest` (details-panel row set and order), `StillnessDetectorTest`, `PressureDeltaDetectorTest`, `IdleWakePolicyTest` (accuracy gates and drift-plus-radius threshold for idle wake fixes), `ReadingStateTest` (state derivation precedence), `ElevationUiStateTest` (the screen's precedence table: block vs. reading vs. search text, and when the settling line goes away), `LocationPermissionPolicyTest` (permission decision table), `ScrimContrastTest` (WCAG contrast — see Accessibility Gates), `LengthFormatterTest`, `LocationAccuracyTest`, `UnitConverterTest`. Shared mockk `Location` factories live in `TestLocations`.
+## Build facts
 
-Tests assert behavior, not language semantics. Reflection checks that a constructor exists, that a class is not abstract, or that a sealed `object` equals itself are guaranteed by the compiler and do not belong here.
+- Compile SDK 37, target 36, min 34. Toolchain is Temurin JDK 21 with Java/Kotlin target 17. AGP and Gradle versions live in `gradle/libs.versions.toml` and `gradle-wrapper.properties`.
+- Debug builds use applicationId suffix `.debug`, so debug and release installs coexist.
+- Local `assembleRelease` is unsigned unless `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` are all set. Local builds default to `versionName "1.0.0-dev"`; override with `-PversionName=1.0.999 -PversionCode=10999`.
+- `AndroidManifest.xml` declares `android.hardware.location.gps` as required. This filters Play Store devices.
 
-### Instrumented Tests (`app/src/androidTest/`)
-
-- **HiltTestRunner**: custom runner — swaps in `HiltTestApplication` and enables global ATF accessibility checks
-- **AccessibilityChecksTest**: drives interactive states in both day and night uiMode so ATF validates each
-- **ElevationFragmentTest**: UI interactions (fine+coarse granted), including the details-panel toggle cycle that exercises `DetailsSourcesController`'s arm/release/re-arm path through `ElevationTracker` — a leaked or double-registered listener is invisible to the compiler and to the unit tests. `ElevationTracker` itself is the Android shell and has no JVM test; these tests plus the pure `ElevationSession`/`ElevationUiState` suites are what cover it
-- **LocationPermissionTest**: three classes in one file (`LocationPermissionTest`, `CoarseLocationPermissionTest`, `BothLocationPermissionsTest`) covering the different grant combinations
-- **StartupCrashTest**: crash detection and component initialization validation; all three cases go through `HiltUiTestBase.launchHome()`, whose Espresso check syncs on the looper — do not reintroduce `Thread.sleep` inside `onActivity`, which blocks the very thread it appears to wait on
-
-All instrumented tests use `@HiltAndroidTest` + `HiltAndroidRule`; rule ordering matters — `HiltAndroidRule` must be first (`order = 0`), `GrantPermissionRule` after it.
-
-Instrumented tests run under **Android Test Orchestrator** (`testOptions.execution = "ANDROIDX_TEST_ORCHESTRATOR"`) with `clearPackageData=true`: each test gets its own instrumentation process, and `pm clear` before it resets app data *and* runtime permissions. That is what lets `CoarseLocationPermissionTest` see a coarse-only grant — `GrantPermissionRule` grants can't be revoked within a process, so in a shared run an earlier test's FINE grant would leak into it. The test asserts FINE is *not* granted and fails if that isolation is ever lost; don't turn it back into an `assume`, which would skip silently. A side effect: no DataStore preference (e.g. the "permission requested" flag) carries over between tests.
-
-### CI (`.github/workflows/android_build.yml`)
-
-Triggers on push to `main` and on all PRs (deliberately no base-branch filter, to support stacked PRs). A concurrency group cancels superseded PR runs; main runs get a group per commit, so none is cancelled, because `release.yml` needs a CI result for every merged commit. Every job has a `timeout-minutes`. Two jobs, running in parallel. No CI job scans dependencies for advisories: Dependabot alerts and Dependabot security updates cover that, from the dependency graph that GitHub's Automatic Dependency Submission builds per commit, and GitHub secret scanning with push protection covers secrets. Do not add a Trivy `fs` scan for dependencies: Trivy finds Gradle dependencies only through a committed `gradle.lockfile`, which this repo does not have, so it reports zero findings.
-
-1. **build-and-test**: single job running `lintDebug testDebugUnitTest assembleDebug assembleRelease` (combined to avoid per-job setup overhead); publishes test results and lint annotations to the PR; uploads the debug APK; `setup-gradle`'s default cache mode (writes on main, read-only on PRs, which keeps PR entries out of the 10 GB repo cache quota). `assembleRelease` is there so R8 and resource shrinking are exercised on every PR rather than first running in `release.yml`; without signing secrets it produces an unsigned APK that is built but never uploaded
-2. **instrumented-tests**: instrumented tests on the `pixel8proapi35` Gradle Managed Device (API 35, `aosp-atd`, declared in `app/build.gradle.kts`; `testedAbi` follows the host's `os.arch`, `x86_64` on CI and `arm64-v8a` on Apple Silicon, because AGP 10 defaults it to `arm64-v8a` everywhere. AGP 9.4.1's `pixel8proapi35Setup` still logs "does not specify a testedAbi" on x86_64 hosts: that task never receives the DSL value, while the test runner does read it, so the warning is spurious and not a sign the setting is ignored) with KVM and `swiftshader_indirect` GPU — AGP downloads the image, boots the emulator headless and tears it down, so there is no third-party emulator action. Its name, `Instrumented Tests`, is a required status check in the `main` ruleset: renaming the job blocks every merge until the ruleset is updated. `setup-gradle`'s default cache mode like job 1; it saves its own main entry because it alone resolves the UTP test runner's dependencies (`junit-platform-*`), and a read-only cache made every run fetch them from Maven Central, so a Central outage (HTTP 403) failed the build. No `needs:` on job 1: it builds its own APKs and consumes nothing from job 1. The device and its boot snapshot (`~/.android/avd/gradle-managed`) and the emulator and system image (`$ANDROID_HOME/emulator`, `$ANDROID_HOME/system-images/android-35/aosp_atd`) share one cache entry. The runner image ships neither, so without them AGP downloads both on every run (~28 s). The key includes the AGP version from `gradle/libs.versions.toml`, so an AGP bump starts a fresh entry and a fresh emulator. The entry is restored everywhere but saved only on main; PR-scoped entries can't be restored by any other ref, and a few of them evict main's entry. `pixel8proapi35Setup` runs as its own step only on a cache miss, so the snapshot is saved before any test runs. That step then waits until `lsof` shows no process holding a file in the AVD directory, because the emulator keeps writing for a few seconds after the task returns and `tar` fails the save on a file that changes mid-read. It then deletes the `*.lock` files and `active_gradle_devices`, which describe an emulator that no longer exists, so no runner restores them; `!` exclusions in the cache `path:` cannot do this, because `tar` recurses into the listed directory; on a hit, the test task's own setup dependency checks the restored device. Uploads both `app/build/reports/androidTests/` and `app/build/outputs/androidTest-results/` (each test's logcat)
-
-Gradle performance flags (parallel, build cache, `workers.max=4`, configuration cache, no incremental Kotlin) are set via `GRADLE_OPTS` in the workflow — the configuration cache is CI-only and only in `android_build.yml`, not `release.yml`. The configuration cache does not survive between runs: `setup-gradle`'s cache covers `~/.gradle/caches` but not the project's `.gradle/configuration-cache`, so every CI run reconfigures (~10–16 s per job) even with `cache-encryption-key` set. Keep it out of `release.yml` regardless: that build reads the signing secrets at configuration time, so its entries would contain the keystore password. Do not repeat them as `--parallel`/`--build-cache`/`--no-daemon` on the `./gradlew` command lines.
-
-Every action is pinned to a commit SHA with an exact-version comment (`@<sha> # v7.0.1`), which Dependabot updates together. Every checkout sets `persist-credentials: false`, and `${{ }}` values reach `run:` scripts only through `env:`. Dependabot groups all action bumps into one PR and applies a 7-day cooldown to both ecosystems, because every merge to main publishes a release. Workflow changes must pass `actionlint` and `zizmor` clean; the one `zizmor` ignore (`dangerous-triggers` on `release.yml`) is justified inline.
-
-### Quality Gates
-
-All releases must pass: lint (including accessibility-as-error), unit tests, and instrumented tests. Releases only happen if ALL checks pass.
-
-### GitHub Workflow Testing
-
-Validate workflow changes with `act` before committing:
-
-```bash
-brew install act              # if not already installed
-act --list                    # list workflows and jobs
-act push -j build-and-test --container-architecture linux/amd64 --dryrun
-act push -j build-and-test --container-architecture linux/amd64   # full run (requires Docker)
-```
-
-Use `--container-architecture linux/amd64` on Apple M-series chips to avoid compatibility issues.
+CI and release rules are in `.claude/rules/ci-and-release.md` and load when Claude reads a file under `.github/workflows/` or `RELEASE_SETUP.md`. Every merge to `main` that passes CI ships a release, so treat a merge as a release. Roll back with `git revert`.
