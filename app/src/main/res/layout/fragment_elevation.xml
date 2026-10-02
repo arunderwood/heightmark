@@ -28,11 +28,18 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <!-- Not a useless parent: fillViewport stretches this frame to the
+             viewport, and its gravity pins the scrim column to the bottom.
+             Merging the two would stretch bg_bottom_scrim over the whole
+             screen and darken the photo. layout_gravity="bottom" on a
+             ScrollView child instead clips the top of content taller than
+             the viewport, as in landscape. -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:gravity="bottom"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            tools:ignore="UselessParent">
 
             <LinearLayout
                 android:id="@+id/content_container"

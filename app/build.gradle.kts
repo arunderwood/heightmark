@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.bizzarosn.heightmark"
         minSdk = 34
-        targetSdk = 36
+        targetSdk = 37
 
         // Support dynamic versioning from CI, with local fallback
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 4
@@ -88,33 +88,61 @@ android {
         unitTests.all {
             it.maxParallelForks = Runtime.getRuntime().availableProcessors()
         }
-        // Run with ./gradlew pixel8proapi35DebugAndroidTest. AGP downloads the
-        // image, boots a headless emulator, runs the tests, and shuts it down.
+        // Run with ./gradlew allGroupDebugAndroidTest, or one device with
+        // ./gradlew pixel8proapi36DebugAndroidTest. AGP downloads the image,
+        // boots a headless emulator, runs the tests, and shuts it down.
         // aosp-atd: no Google services, which the app never uses, and a
         // lighter image than google_apis.
+        //
+        // API 36 is the newest aosp-atd image Google publishes. Behavior gated
+        // on targetSdk (forced edge-to-edge, default predictive back) only
+        // runs on a device at that API level or above, so this device is the
+        // only one that sees the platform the app targets. Move it up when a
+        // newer aosp-atd image appears.
         managedDevices {
+            // CI runs one job per device; android_build.yml's matrix must list
+            // the same devices.
+            val deviceApiLevels = listOf(35, 36)
             localDevices {
-                create("pixel8proapi35") {
-                    device = "Pixel 8 Pro"
-                    apiLevel = 35
-                    systemImageSource = "aosp-atd"
-                    // The emulator runs only images of the host's own ABI, and
-                    // the x86_64 aosp-atd image has no ARM translation. AGP 10
-                    // defaults testedAbi to arm64-v8a on every host, which
-                    // would leave x86_64 CI runners without a usable device.
-                    testedAbi = when (System.getProperty("os.arch")) {
-                        "aarch64", "arm64" -> "arm64-v8a"
-                        else -> "x86_64"
+                deviceApiLevels.forEach { level ->
+                    create("pixel8proapi$level") {
+                        device = "Pixel 8 Pro"
+                        apiLevel = level
+                        systemImageSource = "aosp-atd"
+                        // The emulator runs only images of the host's own ABI,
+                        // and the x86_64 aosp-atd image has no ARM translation.
+                        // AGP 10 defaults testedAbi to arm64-v8a on every host,
+                        // which would leave x86_64 CI runners without a usable
+                        // device.
+                        testedAbi = when (System.getProperty("os.arch")) {
+                            "aarch64", "arm64" -> "arm64-v8a"
+                            else -> "x86_64"
+                        }
                     }
+                }
+            }
+            groups {
+                create("all") {
+                    deviceApiLevels.forEach { targetDevices.add(localDevices["pixel8proapi$it"]) }
                 }
             }
         }
     }
+    // The dependency-metadata block AGP writes into the APK signing block is
+    // encrypted with Google's key. F-Droid's scanner rejects it as an opaque
+    // blob, so the sideload APK leaves it out. The Play bundle keeps it,
+    // because Play uses it for SDK Index advisories.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
+    }
     lint {
         // Severities live in lint.xml, where the whole Accessibility category
         // is promoted to error; abortOnError (the AGP default, made explicit)
-        // turns those findings into CI build failures.
+        // turns those findings into CI build failures. warningsAsErrors gives
+        // every other warning the same weight, so none piles up unseen.
         abortOnError = true
+        warningsAsErrors = true
     }
 }
 

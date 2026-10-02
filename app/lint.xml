@@ -4,4 +4,13 @@
          check — and any added in future AGP releases — fails the build
          instead of warning. -->
     <issue id="Accessibility" severity="error" />
+
+    <!-- warningsAsErrors would turn these into build failures whenever a newer
+         library, AGP or Android release ships, which happens independently of
+         any change in this repo. Dependabot owns dependency and AGP versions;
+         targetSdk follows Play's yearly deadline. They stay in the report
+         without blocking the build. -->
+    <issue id="GradleDependency" severity="informational" />
+    <issue id="AndroidGradlePluginVersion" severity="informational" />
+    <issue id="OldTargetApi" severity="informational" />
 </lint>
