@@ -27,8 +27,9 @@ import kotlin.math.pow
  * best estimate of where the device went, with the gap's weather variance
  * added.
  *
- * Samples are averaged into one reading per second by their own timestamps,
- * because the sensor may deliver them far faster than requested. Pure JVM;
+ * [SecondAverager] turns the samples into one reading per second by their
+ * own timestamps, because the sensor may deliver them far faster than
+ * requested. Pure JVM;
  * the caller supplies the timestamps.
  */
 class BarometricOdometer(
@@ -58,30 +59,15 @@ class BarometricOdometer(
     private val window = ArrayDeque<Reading>()
     private var last: Reading? = null
 
-    private var bucketSecond = Long.MIN_VALUE
-    private var bucketSumHpa = 0.0
-    private var bucketCount = 0
+    private val perSecond = SecondAverager()
 
     /**
      * Feeds one sample of [pressureHpa] taken at [atNanos] on the
      * elapsed-realtime clock. Returns true when [motionMeters] changed.
      */
     fun feed(pressureHpa: Float, atNanos: Long): Boolean {
-        val second = atNanos / NANOS_PER_SECOND
-        if (second == bucketSecond) {
-            bucketSumHpa += pressureHpa
-            bucketCount++
-            return false
-        }
-        val changed = if (bucketCount > 0) {
-            step(standardAltitude(bucketSumHpa / bucketCount), bucketSecond * NANOS_PER_SECOND)
-        } else {
-            false
-        }
-        bucketSecond = second
-        bucketSumHpa = pressureHpa.toDouble()
-        bucketCount = 1
-        return changed
+        val reading = perSecond.add(pressureHpa, atNanos) ?: return false
+        return step(standardAltitude(reading.mean), reading.atNanos)
     }
 
     private fun step(altitudeMeters: Double, atNanos: Long): Boolean {

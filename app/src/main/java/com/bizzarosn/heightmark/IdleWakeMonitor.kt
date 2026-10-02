@@ -130,8 +130,8 @@ class IdleWakeMonitor @Inject constructor(
 
     /** Returns true if a barometer is present and armed. */
     private fun armBarometer(): Boolean {
-        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) { pressureHpa, _ ->
-            if (pressureDetector.feed(pressureHpa)) {
+        pressureListener = sensorManager.registerPressureListener(PRESSURE_SAMPLING_PERIOD_US) { pressureHpa, atNanos ->
+            if (pressureDetector.feed(pressureHpa, atNanos)) {
                 Log.d(TAG, "Sustained pressure change detected")
                 wake(WakeTrigger.PRESSURE_CHANGE)
             }
@@ -177,7 +177,7 @@ class IdleWakeMonitor @Inject constructor(
 
     companion object {
         private const val TAG = "IdleWakeMonitor"
-        private const val PRESSURE_SAMPLING_PERIOD_US = 1_000_000 // 1 Hz
+        private const val PRESSURE_SAMPLING_PERIOD_US = 1_000_000 // 1 Hz, a hint the sensor may exceed
         private const val PASSIVE_INTERVAL_MS = 10_000L
         private const val FALLBACK_POLL_INTERVAL_MS = 180_000L // 3 min
     }
