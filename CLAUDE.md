@@ -42,7 +42,7 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 ## Do not
 
 - Add Google Play services or `play-services-location`. The app runs on de-googled AOSP devices and stays F-Droid-eligible. Location uses `LocationManager` with `GPS_PROVIDER` only.
-- Re-add `org.jetbrains.kotlin.android`, a `kotlin` catalog version, or the `android.builtInKotlin` / `android.newDsl` opt-outs. AGP's built-in Kotlin is used, and the standalone plugin calls the legacy variant API, which AGP has deprecated for removal.
+- Set `android.builtInKotlin=false` or `android.newDsl=false` to get past a build error. Both are deprecated and removed in AGP 10.
 - Repin the Daemon JVM vendor (`gradle/gradle-daemon-jvm.properties`) to `JETBRAINS`. Android Studio's bundled JBR is not on Gradle's toolchain search path, so every machine and CI job would download a JDK. Dependabot bumps none of `toolchainVersion`, `.tool-versions`, or `setup-java`'s `java-version`. Move the three together, and keep `distribution: 'temurin'` in all three `setup-java` steps.
 - Turn the `AppModule` bindings into `@Inject constructor`s. Each has its own reason:
   - `LocationManager` and `SensorManager` are framework services from `getSystemService`, with no constructor to annotate.

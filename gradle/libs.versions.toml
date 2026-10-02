@@ -19,6 +19,12 @@ ksp = "2.3.12"
 mockk = "1.14.11"
 coreSplashscreen = "1.2.0"
 accessibilityTestFramework = "4.1.1"
+composeBom = "2026.09.00"
+# The project's Kotlin version. The Compose compiler plugin below puts
+# kotlin-gradle-plugin at this version on the build classpath, which overrides
+# the one AGP's built-in Kotlin bundles (./gradlew buildEnvironment shows the
+# resolution). Lint rejects a pin below the newest release.
+kotlin = "2.4.20"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,9 +55,14 @@ hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 hiltAndroid = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+kotlinCompose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 
