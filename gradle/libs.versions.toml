@@ -10,7 +10,6 @@ activity = "1.13.0"
 constraintlayout = "2.2.2"
 fragment = "1.9.1"
 lifecycle = "2.11.0"
-navigation = "2.10.2"
 datastorePreferences = "1.2.1"
 androidxTest = "1.7.0"
 androidxTestOrchestrator = "1.6.1"
@@ -36,12 +35,11 @@ material = { group = "com.google.android.material", name = "material", version.r
 androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 # by viewModels() and viewModelScope/repeatOnLifecycle are used directly, so
-# they are pinned here rather than inherited through navigation-fragment-ktx
+# these three are declared with their own versions for Dependabot to bump,
+# instead of resolving at whatever version another library happens to pull in
 androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
 androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
-androidx-navigation-fragment-ktx = { group = "androidx.navigation", name = "navigation-fragment-ktx", version.ref = "navigation" }
-androidx-navigation-ui-ktx = { group = "androidx.navigation", name = "navigation-ui-ktx", version.ref = "navigation" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTest" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTest" }
