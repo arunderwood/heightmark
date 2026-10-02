@@ -10,6 +10,8 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.pow
 
 class ElevationSessionTest {
@@ -495,6 +497,74 @@ class ElevationSessionTest {
         assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
     }
 
+    // ---- Pressurized cabin ----
+    //
+    // An airliner's barometer reads the cabin, held at or below 8,000 ft
+    // (14 CFR 25.841), while GNSS reads the aircraft. A climb to cruise moves
+    // the cabin about a fifth as far as the aircraft.
+
+    @Test
+    fun `with fixes, a flight's reading follows GNSS and not the cabin`() {
+        val flight = Flight()
+        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+        flight.leg(1200, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
+        flight.leg(600, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
+        flight.leg(1500, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+
+        // A 9 m/s climb outruns a one-second fix cadence by a few seconds
+        assertTrue("worst gap ${flight.worstGapMeters} m", flight.worstGapMeters < 50.0)
+        assertEquals(GROUND_M, flight.session.displayedElevation!!.meters, 5.0)
+    }
+
+    @Test
+    fun `after a descent without fixes, the first fixes on the ground replace the cabin's height`() {
+        val flight = Flight()
+        flight.leg(300, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+        flight.leg(1200, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
+        flight.leg(600, aircraftTo = CRUISE_M, cabinTo = CABIN_CEILING_M)
+        // Away from a window: the barometer alone carries the reading down
+        flight.leg(1500, aircraftTo = GROUND_M, cabinTo = GROUND_M, fixes = false)
+
+        flight.leg(ElevationService.JUMP_CONFIRM_COUNT, aircraftTo = GROUND_M, cabinTo = GROUND_M)
+
+        assertEquals(GROUND_M, flight.session.displayedElevation!!.meters, 5.0)
+    }
+
+    /**
+     * A session at the production window size, fed one barometer sample and
+     * (optionally) one fix a second. Starts on the ground.
+     */
+    private class Flight {
+        val session = ElevationSession(ElevationService(ElevationService.DEFAULT_WINDOW_SIZE))
+        private var second = 0L
+        private var aircraftMeters = GROUND_M
+        private var cabinMeters = GROUND_M
+
+        /** Largest gap between the reading and the aircraft's height after any fix. */
+        var worstGapMeters = 0.0
+            private set
+
+        /** Moves aircraft and cabin linearly to the given heights over [seconds]. */
+        fun leg(seconds: Int, aircraftTo: Double, cabinTo: Double, fixes: Boolean = true) {
+            val aircraftFrom = aircraftMeters
+            val cabinFrom = cabinMeters
+            for (i in 1..seconds) {
+                aircraftMeters = aircraftFrom + (aircraftTo - aircraftFrom) * i / seconds
+                cabinMeters = cabinFrom + (cabinTo - cabinFrom) * i / seconds
+                val atNanos = second++ * NANOS_PER_SECOND
+                session.onPressure(pressureAt(cabinMeters).toFloat(), atNanos)
+                if (!fixes) continue
+                val pending = session.offer(
+                    TestLocations.fixForAdmission(verticalAccuracy = 5f, atNanos = atNanos)
+                )
+                session.commit(pending!!, Elevation(aircraftMeters, MEAN_SEA_LEVEL))
+                val gap = abs(session.displayedElevation!!.meters - aircraftMeters)
+                worstGapMeters = max(worstGapMeters, gap)
+            }
+        }
+    }
+
     // ---- Background-gap policy ----
 
     @Test
@@ -645,12 +715,18 @@ class ElevationSessionTest {
         holdPressure(pressureAt(barometerHeight), seconds = 40)
     }
 
-    /** International Standard Atmosphere pressure at [heightMeters]. */
-    private fun pressureAt(heightMeters: Double): Double =
-        1013.25 * (1 - heightMeters / 44_330.0).pow(5.255)
-
     private companion object {
         const val NANOS_PER_SECOND = 1_000_000_000L
         const val WINDOW_SIZE = 3
+
+        const val GROUND_M = 100.0
+        const val CRUISE_M = 11_000.0
+
+        /** 8,000 ft, the highest cabin altitude a transport-category airliner may hold. */
+        const val CABIN_CEILING_M = 2_438.0
+
+        /** International Standard Atmosphere pressure at [heightMeters]. */
+        fun pressureAt(heightMeters: Double): Double =
+            1013.25 * (1 - heightMeters / 44_330.0).pow(5.255)
     }
 }
