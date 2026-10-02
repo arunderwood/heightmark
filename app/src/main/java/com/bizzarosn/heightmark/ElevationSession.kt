@@ -37,7 +37,12 @@ class ElevationSession @Inject constructor(
     var hasFix: Boolean = false
         private set
 
-    /** True while the GPS radio is off for the stationary duty cycle. */
+    /**
+     * True while the GPS radio is off for the stationary duty cycle. This is
+     * the only record of idleness: [ElevationTracker] arms [IdleWakeMonitor]
+     * exactly while it holds, and anything that would turn the radio on must
+     * check it first.
+     */
     var isIdle: Boolean = false
         private set
 
@@ -161,6 +166,16 @@ class ElevationSession @Inject constructor(
     fun wake() {
         isIdle = false
         flush()
+    }
+
+    /**
+     * Tracking was blocked (location services off, permission lost). An idle
+     * session leaves idle here: nothing watches for motion during the outage,
+     * so the frozen reading may be wrong once fixes return, and "resting"
+     * would be the wrong thing to say about it.
+     */
+    fun onBlocked() {
+        if (isIdle) wake()
     }
 
     /** Screen backgrounded at [nowElapsedRealtimeMs]; the duty cycle ends with it. */

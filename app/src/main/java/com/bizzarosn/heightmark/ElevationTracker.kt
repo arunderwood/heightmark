@@ -187,6 +187,11 @@ class ElevationTracker @Inject constructor(
             return
         }
 
+        // While idle the radio is off on purpose and IdleWakeMonitor owns the
+        // way back. Starting GPS here would run both at once, and goIdle
+        // returns early while the monitor is armed, so the radio would stay on.
+        if (session.isIdle) return
+
         val listener = locationListener
             ?: LocationListener { location -> onGnssFix(location) }
                 .also { locationListener = it }
@@ -316,6 +321,10 @@ class ElevationTracker @Inject constructor(
     private fun block(reason: ElevationUiState.Blocked) {
         updateBlocked(reason)
         stopLocationUpdates()
+        // Where the device is when tracking resumes is unknown, so stillness
+        // gathered before the outage no longer applies
+        session.onBlocked()
+        stillnessDetector.reset()
         publish()
     }
 
