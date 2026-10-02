@@ -95,7 +95,7 @@ The workflow releases to the `internal` track. Change `tracks:` in the workflow 
 
 Every merge to `main` that passes CI produces a release:
 
-1. The merge triggers the "Android CI" workflow on `main` (Trivy security scan, then lint, unit tests, `assembleDebug`, `assembleRelease`, then instrumented tests).
+1. The merge triggers the "Android CI" workflow on `main` (lint, unit tests, `assembleDebug`, `assembleRelease`, and instrumented tests).
 2. When "Android CI" completes **successfully** on `main`, `release.yml` starts via a `workflow_run` trigger. A failed CI run releases nothing.
 3. `release.yml` computes the version itself from its own `run_number` — `versionCode = 10000 + run_number`, `versionName = "1.0.<run_number>"` — and passes them to Gradle as `-PversionCode` / `-PversionName`. The values in `app/build.gradle.kts` (`versionCode 4`, `versionName "1.0.0-dev"`) are only local-build fallbacks; editing them has no effect on releases.
 4. The signed AAB is uploaded to the Play Store `internal` track. A separate `publish` job then attests the AAB and the sideload APK and creates a GitHub release, tagged `v<versionName>`, with auto-generated notes and both files attached. The tag is an *output* of the release, not its trigger.
