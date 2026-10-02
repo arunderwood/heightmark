@@ -27,16 +27,16 @@ class PressureDeltaDetectorTest {
         return null
     }
 
-    /** ~4 m of ascent at t = 10 s: pressure drops 0.5 hPa and stays there. */
-    private val elevator: (Double) -> Double = { t -> if (t < 10.0) 1000.0 else 999.5 }
+    /** About 4 m of ascent at t = 10 s: pressure drops 0.5 hPa and stays there. */
+    private val stepChange: (Double) -> Double = { t -> if (t < 10.0) 1000.0 else 999.5 }
 
-    /** A 2 hPa door-slam transient lasting [lengthS], starting at t = 10 s + [phaseS]. */
-    private fun doorSlam(lengthS: Double, phaseS: Double = 0.0): (Double) -> Double = { t ->
+    /** A 2 hPa pressure transient lasting [lengthS], starting at t = 10 s + [phaseS]. */
+    private fun transient(lengthS: Double, phaseS: Double = 0.0): (Double) -> Double = { t ->
         if (t >= 10.0 + phaseS && t < 10.0 + phaseS + lengthS) 998.0 else 1000.0
     }
 
-    /** ~5 m of slow stairs: 0.6 hPa spread evenly over 60 s, then held. */
-    private val slowClimb: (Double) -> Double = { t ->
+    /** About 5 m of ascent: 0.6 hPa spread evenly over 60 s, then held. */
+    private val slowRamp: (Double) -> Double = { t ->
         1000.0 - 0.6 * ((t - 10.0) / 60.0).coerceIn(0.0, 1.0)
     }
 
@@ -51,9 +51,9 @@ class PressureDeltaDetectorTest {
     }
 
     @Test
-    fun `elevator-scale sustained change wakes within a few seconds`() {
+    fun `a sustained step change wakes within a few seconds`() {
         for (rate in RATES_HZ) {
-            val woke = wakeTime(rate, 60, pressureAt = elevator)
+            val woke = wakeTime(rate, 60, pressureAt = stepChange)
             assertNotNull("at $rate Hz", woke)
             // The smoothed change takes ~2 s to cross, then must hold for 3 s
             assertEquals("at $rate Hz: seconds after the step", 5.0, woke!! - 10.0, 1.0)
@@ -63,9 +63,9 @@ class PressureDeltaDetectorTest {
     @Test
     fun `the same change wakes at the same time at any delivery rate`() {
         val scenarios = mapOf(
-            "elevator" to elevator,
-            "slow climb" to slowClimb,
-            "door slam" to doorSlam(lengthS = 0.5)
+            "step change" to stepChange,
+            "slow ramp" to slowRamp,
+            "transient" to transient(lengthS = 0.5)
         )
         for ((name, pressureAt) in scenarios) {
             val atOneHz = wakeTime(1.0, 120, pressureAt = pressureAt)
@@ -80,24 +80,24 @@ class PressureDeltaDetectorTest {
     }
 
     @Test
-    fun `half-second door slam at 15 Hz does not wake`() {
+    fun `a half-second transient at 15 Hz does not wake`() {
         for (phase in listOf(0.0, 0.25, 0.5, 0.75)) {
             assertNull(
-                "slam starting $phase s into a second",
-                wakeTime(15.0, 60, pressureAt = doorSlam(lengthS = 0.5, phaseS = phase))
+                "transient starting $phase s into a second",
+                wakeTime(15.0, 60, pressureAt = transient(lengthS = 0.5, phaseS = phase))
             )
         }
     }
 
     @Test
-    fun `single-sample door slam at 1 Hz does not wake`() {
-        assertNull(wakeTime(1.0, 60, pressureAt = doorSlam(lengthS = 1.0)))
+    fun `a single-sample transient at 1 Hz does not wake`() {
+        assertNull(wakeTime(1.0, 60, pressureAt = transient(lengthS = 1.0)))
     }
 
     @Test
-    fun `slow sustained climb at 15 Hz wakes`() {
-        val woke = wakeTime(15.0, 120, pressureAt = slowClimb)
-        assertNotNull("A 5 m climb over a minute must outrun the baseline", woke)
+    fun `a slow sustained ramp at 15 Hz wakes`() {
+        val woke = wakeTime(15.0, 120, pressureAt = slowRamp)
+        assertNotNull("5 m over a minute must outrun the baseline", woke)
     }
 
     @Test
@@ -110,7 +110,7 @@ class PressureDeltaDetectorTest {
     @Test
     fun `reset requires a new baseline`() {
         val detector = PressureDeltaDetector()
-        wakeTime(15.0, 12, detector, elevator)
+        wakeTime(15.0, 12, detector, stepChange)
         detector.reset()
         // After reset, 950 hPa is the new baseline, not a 50 hPa change
         assertNull(wakeTime(15.0, 30, detector) { 950.0 })

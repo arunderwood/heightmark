@@ -4,19 +4,19 @@ import kotlin.math.abs
 import kotlin.math.exp
 
 /**
- * Detects vertical movement (elevator, escalator, stairs) from barometric
- * pressure samples while the device is otherwise stationary.
+ * Detects a change in height from barometric pressure samples while the
+ * device is otherwise stationary and the GPS radio is off.
  *
  * Pressure falls ~0.12 hPa per meter of ascent, so [thresholdHpa] of 0.3
  * corresponds to roughly 2.5 m of elevation change. The smoothed pressure
  * (time constant [smoothingTauNanos], about 3 s) is compared against a
  * baseline. Two defenses against false wakes:
  *  - the change must stay beyond the threshold for [sustainNanos], about 3 s,
- *    rejecting the brief spikes HVAC systems and closing doors produce
+ *    rejecting the brief spikes from ventilation fans and closing doors
  *  - while quiet, the baseline tracks the current pressure with time constant
  *    [baselineTauNanos], about 100 s. It absorbs weather-front drift (~1
- *    hPa/hour at worst) but lags a climb of a few meters a minute far enough
- *    to cross the threshold.
+ *    hPa/hour at worst) but lags a sustained change of a few meters a minute
+ *    far enough to cross the threshold.
  *
  * Every filter setting is a duration, applied by sample timestamp. The
  * requested sampling period is only a hint: a Pixel 8 Pro delivers 15 Hz when
