@@ -45,14 +45,17 @@ object TestLocations {
 
     /**
      * A fix carrying only what the reading filter inspects: whether it has an
-     * altitude at all, and the vertical accuracy it reports (null for none).
+     * altitude at all, the vertical accuracy it reports (null for none), and
+     * when it was taken.
      */
     fun fixForAdmission(
         hasAltitude: Boolean = true,
-        verticalAccuracy: Float? = null
+        verticalAccuracy: Float? = null,
+        atNanos: Long = 0L
     ): Location {
         val location = mockk<Location>()
         every { location.hasAltitude() } returns hasAltitude
+        every { location.elapsedRealtimeNanos } returns atNanos
         every { location.hasVerticalAccuracy() } returns (verticalAccuracy != null)
         verticalAccuracy?.let { every { location.verticalAccuracyMeters } returns it }
         return location

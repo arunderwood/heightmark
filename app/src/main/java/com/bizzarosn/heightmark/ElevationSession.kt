@@ -12,26 +12,46 @@ import javax.inject.Inject
  * the last value shown and the [ElevationDatum] it was measured against — so a
  * flush and the state explaining it can never drift apart.
  *
+ * The number on screen is built from three parts:
+ *  - The window: the current GPS session's fixes, from radio-on to radio-off.
+ *  - The [pool]: every earlier session folded into one [HeightEstimate] by
+ *    [SessionPool]. A phone's GNSS height carries a bias of about 5 m that
+ *    lasts minutes, so each session settles somewhere new. Pooling sessions
+ *    instead of replacing one with the next is what stops a still phone's
+ *    reading from jumping by that bias at every wake.
+ *  - The [odometer]: height carried up or down since tracking began, from
+ *    the barometer, with weather left out. Window and pool hold heights
+ *    minus the odometer reading at the time, so a fix taken two floors down
+ *    still measures the same thing as one taken here, and the screen follows
+ *    a climb at once instead of waiting for GNSS to notice. On a device
+ *    without a barometer the odometer stays at zero.
+ *
+ * A session is folded into the pool when it ends (the radio restarts after a
+ * wake, a long background gap or a block) and every [FOLD_INTERVAL_NANOS]
+ * while it runs, since windows that far apart carry nearly independent errors.
+ *
  * Following [DetailsPanelPresenter], the clock is an input rather than a
  * [android.os.SystemClock] call, so the whole policy stays assertable in a JVM
  * test. Nothing here touches a Context or a view: [ElevationTracker] keeps the
  * listener registration and the coroutines, and [ElevationFragment] the
  * rendering.
  *
- * Confined to the main thread — GNSS callbacks and the geoid-conversion
- * coroutine both land there — so none of the state is synchronized.
+ * Confined to the main thread — GNSS callbacks, barometer samples and the
+ * geoid-conversion coroutine all land there — so none of the state is
+ * synchronized.
  */
 class ElevationSession @Inject constructor(
-    private val elevationService: ElevationService
+    private val window: ElevationService
 ) {
 
     /**
      * A fix admitted for geoid conversion. [epoch] pins it to the averaging
      * window it was admitted against, so [commit] can drop it if that window
      * was flushed while the conversion was in flight. A null
-     * [verticalAccuracyMeters] means the fix reported none.
+     * [verticalAccuracyMeters] means the fix reported none. [atNanos] is the
+     * fix's elapsed-realtime timestamp.
      */
-    data class PendingFix(val epoch: Int, val verticalAccuracyMeters: Float?)
+    data class PendingFix(val epoch: Int, val verticalAccuracyMeters: Float?, val atNanos: Long)
 
     /** True once any fix has been committed this session. */
     var hasFix: Boolean = false
@@ -58,16 +78,27 @@ class ElevationSession @Inject constructor(
         private set
 
     /**
-     * The last elevation committed and the datum it was measured against, kept
-     * across a flush so the hero number can stay on screen — dimmed by
-     * [ReadingState.Dormant] — until fresh fixes land. Null until the first fix.
+     * The elevation on screen and the datum it was measured against. It stays
+     * on screen across a flush — dimmed by [ReadingState.Dormant] — until
+     * fresh fixes land. Null until the first fix.
      */
     var displayedElevation: Elevation? = null
         private set
 
-    /** Readings currently in the averaging window; the details panel shows it. */
+    /** Readings in the current session's window; the details panel shows it. */
     val readingCount: Int
-        get() = elevationService.snapshot().readingCount
+        get() = window.snapshot().readingCount
+
+    private val odometer = BarometricOdometer()
+
+    /** Earlier sessions at this height, pooled; null until the first one is folded. */
+    private var pool: HeightEstimate? = null
+
+    /** The datum the window and [pool] are measured on; null before the first fix. */
+    private var datum: ElevationDatum? = null
+
+    /** When the window's first fix was taken; null while it is empty. */
+    private var windowStartNanos: Long? = null
 
     private var awaitingFreshFix = false
     private var epoch = 0
@@ -89,7 +120,7 @@ class ElevationSession @Inject constructor(
         // that reports no vertical accuracy is kept: unknown is not the same as bad.
         val reported = location.verticalAccuracyOrNull()
         if (reported != null && reported > MAX_VERTICAL_ACCURACY_M) return null
-        return PendingFix(epoch, reported)
+        return PendingFix(epoch, reported, location.elapsedRealtimeNanos)
     }
 
     /**
@@ -111,23 +142,43 @@ class ElevationSession @Inject constructor(
         if (pending.epoch != epoch) return false
         if (!admits(elevation.datum)) return false
         // Geoid data that only becomes available mid-session shifts every
-        // reading after it by the local separation. Averaging across that
-        // boundary would blend two datums, and letting the jump detector
+        // reading after it by the local separation. Averaging or pooling across
+        // that boundary would blend two datums, and letting the jump detector
         // re-anchor on it would present the change of surface as a climb.
-        if (readingCount > 0 && elevation.datum != displayedElevation?.datum) {
+        if (datum != null && elevation.datum != datum) {
+            pool = null
             flush()
         }
-        displayedElevation = Elevation(
-            elevationService
-                .addElevationReading(elevation.meters, accuracyMeters)
-                .averageMeters,
-            elevation.datum
-        )
+        datum = elevation.datum
+        val start = windowStartNanos
+        if (start != null && pending.atNanos - start >= FOLD_INTERVAL_NANOS) fold()
+        if (windowStartNanos == null) windowStartNanos = pending.atNanos
+        window.addElevationReading(elevation.meters - odometer.motionMeters, accuracyMeters)
         hasFix = true
         if (elevation.datum == ElevationDatum.MEAN_SEA_LEVEL) hasSeaLevelFix = true
         awaitingFreshFix = false
         signalStale = false
+        refreshDisplay()
         return true
+    }
+
+    /**
+     * Feeds one barometer sample of [pressureHpa], taken at [atNanos] on the
+     * elapsed-realtime clock. Returns true when the screen needs a repaint.
+     *
+     * The weather variance the odometer accrues while moving belongs to the
+     * pool: it measures how far the pool's frame may have slipped, so the
+     * next session is weighed against it more heavily.
+     */
+    fun onPressure(pressureHpa: Float, atNanos: Long): Boolean {
+        val varianceBefore = odometer.varianceMeters2
+        val moved = odometer.feed(pressureHpa, atNanos)
+        val added = odometer.varianceMeters2 - varianceBefore
+        if (added > 0) pool = pool?.let { it.copy(variance = it.variance + added) }
+        if (!moved) return false
+        val before = displayedElevation
+        refreshDisplay()
+        return displayedElevation != before
     }
 
     /**
@@ -162,20 +213,40 @@ class ElevationSession @Inject constructor(
         if (hasFix && !isIdle) signalStale = true
     }
 
-    /** A wake fired: the device moved, so the window is stale. */
-    fun wake() {
+    /**
+     * [IdleWakeMonitor] fired with [trigger]. The session before it is folded
+     * into the pool and a new one starts, so a wake moves the number only as
+     * far as the new session's weight allows.
+     *
+     * With a working barometer, the odometer has already followed any change
+     * in height. Without one, a wake is the only sign the device may have
+     * moved, so the pool's variance grows by [UNTRACKED_WAKE_VARIANCE_M2]; a
+     * real move further than that is left for [SessionPool]'s gate to refute.
+     * A [WakeTrigger.PRESSURE_CHANGE] while the odometer is not tracking means
+     * the height changed with nothing to measure by how much, so the pool
+     * goes.
+     */
+    fun wake(trigger: WakeTrigger) {
         isIdle = false
-        flush()
+        if (trigger == WakeTrigger.PRESSURE_CHANGE && !odometer.isTracking) {
+            pool = null
+            flush()
+            return
+        }
+        startNewSession()
     }
 
     /**
      * Tracking was blocked (location services off, permission lost). An idle
      * session leaves idle here: nothing watches for motion during the outage,
      * so the frozen reading may be wrong once fixes return, and "resting"
-     * would be the wrong thing to say about it.
+     * would be the wrong thing to say about it. The pool is kept, as for a
+     * wake.
      */
     fun onBlocked() {
-        if (isIdle) wake()
+        if (!isIdle) return
+        isIdle = false
+        startNewSession()
     }
 
     /** Screen backgrounded at [nowElapsedRealtimeMs]; the duty cycle ends with it. */
@@ -186,17 +257,18 @@ class ElevationSession @Inject constructor(
 
     /**
      * Screen foregrounded at [nowElapsedRealtimeMs]. A long gap away from the
-     * app can mean a whole new elevation, so the average starts over rather
-     * than walking the stale window there. The same gap re-opens the datum
-     * question: [hasSeaLevelFix] only clears here, not in [wake]'s frequent
-     * duty-cycle flushes, so a permanently broken geoid conversion can still
-     * recover into the labeled ellipsoid mode instead of dropping fixes
-     * forever.
+     * app can mean a whole new elevation, so the radio's restart begins a new
+     * session, weighed against the pool like any other. The odometer measures
+     * the gap from the pressure change across it. The same gap re-opens the
+     * datum question: [hasSeaLevelFix] only clears here, not in [wake]'s
+     * frequent duty-cycle restarts, so a permanently broken geoid conversion
+     * can still recover into the labeled ellipsoid mode instead of dropping
+     * fixes forever.
      */
     fun onResumed(nowElapsedRealtimeMs: Long) {
         val pausedAt = pausedAtElapsedMs ?: return
         if (nowElapsedRealtimeMs - pausedAt > RESET_AFTER_GAP_MS) {
-            flush()
+            startNewSession()
             hasSeaLevelFix = false
         }
     }
@@ -207,12 +279,68 @@ class ElevationSession @Inject constructor(
         isIdle = isIdle,
         awaitingFreshFix = awaitingFreshFix,
         signalStale = signalStale,
-        snapshot = elevationService.snapshot()
+        pooled = pool != null && verdict() !is SessionPool.Verdict.Refuted,
+        snapshot = window.snapshot()
     )
+
+    /**
+     * Ends the current session: its window is folded into the pool, fixes
+     * converted before this point are dropped, and the reading is dormant
+     * until the next one.
+     */
+    private fun startNewSession() {
+        fold()
+        if (!odometer.isTracking) {
+            pool = pool?.let { it.copy(variance = it.variance + UNTRACKED_WAKE_VARIANCE_M2) }
+        }
+        epoch++
+        if (hasFix) awaitingFreshFix = true
+    }
+
+    /** Folds the window into [pool] as one measurement, then empties it. */
+    private fun fold() {
+        if (window.snapshot().readingCount > 0) {
+            pool = when (val verdict = verdict()) {
+                is SessionPool.Verdict.Pooled -> verdict.estimate
+                SessionPool.Verdict.Refuted, null -> SessionPool.measurement(window.snapshot())
+                SessionPool.Verdict.Undecided -> pool
+            }
+        }
+        window.reset()
+        windowStartNanos = null
+    }
+
+    /** What the current window says about [pool]; null when either is missing. */
+    private fun verdict(): SessionPool.Verdict? {
+        val pool = pool ?: return null
+        val snapshot = window.snapshot()
+        if (snapshot.readingCount == 0) return null
+        return SessionPool.weigh(pool, SessionPool.measurement(snapshot), snapshot.readingCount)
+    }
+
+    /** The height of the odometer's origin that the screen should show, if any. */
+    private fun frameHeight(): Double? {
+        val snapshot = window.snapshot()
+        val pool = pool
+        if (snapshot.readingCount == 0) return pool?.meters
+        if (pool == null) return snapshot.averageMeters
+        return when (val verdict = verdict()) {
+            is SessionPool.Verdict.Pooled -> verdict.estimate.meters
+            SessionPool.Verdict.Refuted -> snapshot.averageMeters
+            SessionPool.Verdict.Undecided, null -> pool.meters
+        }
+    }
+
+    private fun refreshDisplay() {
+        val frame = frameHeight() ?: return
+        val datum = datum ?: return
+        displayedElevation = Elevation(frame + odometer.motionMeters, datum)
+    }
 
     /** Discards the averaging window; the cached number stays available, dimmed. */
     private fun flush() {
-        elevationService.reset()
+        window.reset()
+        windowStartNanos = null
         epoch++
         if (hasFix) {
             awaitingFreshFix = true
@@ -222,6 +350,19 @@ class ElevationSession @Inject constructor(
     companion object {
         /** Fixes reporting worse vertical error than this would drag the average around. */
         const val MAX_VERTICAL_ACCURACY_M = 50f
+
+        /**
+         * GNSS height errors decorrelate over about 240 s, so windows this far
+         * apart in one long session count as separate measurements.
+         */
+        const val FOLD_INTERVAL_NANOS = 240_000_000_000L
+
+        /**
+         * A wake on a device without a barometer may have carried it a floor
+         * up or down (about 3 m) with nothing to measure it, so the pool's
+         * variance grows by a floor's height squared.
+         */
+        const val UNTRACKED_WAKE_VARIANCE_M2 = 9.0
 
         /** A background gap longer than this can mean a whole new elevation. */
         const val RESET_AFTER_GAP_MS = 30_000L

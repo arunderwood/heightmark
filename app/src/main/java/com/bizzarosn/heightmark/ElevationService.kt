@@ -22,7 +22,13 @@ class ElevationService(private val readingsCount: Int) {
         val averageMeters: Double, // NaN while the window is empty
         val readingCount: Int,
         val progress: Float,
-        val settled: Boolean
+        val settled: Boolean,
+        /**
+         * The single-fix accuracy the weighted average is built from: the
+         * root of the readings' harmonic mean variance, so it tracks the
+         * precise fixes that dominate the average. NaN while empty.
+         */
+        val accuracyMeters: Double
     )
 
     private data class Reading(val elevationMeters: Double, val accuracyMeters: Float)
@@ -82,7 +88,8 @@ class ElevationService(private val readingsCount: Int) {
         averageMeters = getAverageElevation(),
         readingCount = window.size,
         progress = window.size.toFloat() / readingsCount,
-        settled = settled
+        settled = settled,
+        accuracyMeters = weightedAccuracy()
     )
 
     private fun append(reading: Reading) {
@@ -93,12 +100,18 @@ class ElevationService(private val readingsCount: Int) {
         // Latched: spread creep alone never demotes a settled reading — a
         // genuine elevation change is the jump detector's job to catch.
         if (!settled && window.size == readingsCount) {
-            val meanAccuracy = window.map { it.accuracyMeters.toDouble() }.average()
-            val limit = max(SETTLE_STDDEV_FLOOR_M, SETTLE_ACCURACY_FACTOR * meanAccuracy)
+            val limit = max(SETTLE_STDDEV_FLOOR_M, SETTLE_ACCURACY_FACTOR * meanAccuracy())
             if (standardDeviation() <= limit) {
                 settled = true
             }
         }
+    }
+
+    private fun meanAccuracy(): Double = window.map { it.accuracyMeters.toDouble() }.average()
+
+    private fun weightedAccuracy(): Double {
+        if (window.isEmpty()) return Double.NaN
+        return sqrt(window.size / window.sumOf { weight(it) })
     }
 
     private fun standardDeviation(): Double {
@@ -114,12 +127,16 @@ class ElevationService(private val readingsCount: Int) {
         var weightedSum = 0.0
         var totalWeight = 0.0
         window.forEach { reading ->
-            val accuracy = max(reading.accuracyMeters.toDouble(), WEIGHT_ACCURACY_FLOOR_M)
-            val weight = 1.0 / (accuracy * accuracy)
+            val weight = weight(reading)
             weightedSum += reading.elevationMeters * weight
             totalWeight += weight
         }
         return weightedSum / totalWeight
+    }
+
+    private fun weight(reading: Reading): Double {
+        val accuracy = max(reading.accuracyMeters.toDouble(), WEIGHT_ACCURACY_FLOOR_M)
+        return 1.0 / (accuracy * accuracy)
     }
 
     companion object {

@@ -47,6 +47,17 @@ class ElevationServiceTest {
     }
 
     @Test
+    fun `snapshot accuracy follows the precise fixes the average is weighted toward`() {
+        assertTrue(elevationService.snapshot().accuracyMeters.isNaN())
+
+        elevationService.addElevationReading(100.0, verticalAccuracyMeters = 2f)
+        val snapshot = elevationService.addElevationReading(100.0, verticalAccuracyMeters = 20f)
+
+        // sqrt(2 / (1/4 + 1/400)): near the 2 m fix, nowhere near the 11 m mean
+        assertEquals(2.814, snapshot.accuracyMeters, 0.001)
+    }
+
+    @Test
     fun `addElevationReading handles negative values`() {
         val result = elevationService.addElevationReading(-100.0)
         assertEquals(-100.0, result.averageMeters, 0.001)

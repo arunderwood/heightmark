@@ -24,6 +24,7 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 - `ElevationTracker` (`@HiltViewModel`) is the Android shell: GNSS, duty cycle, geoid conversion, watchdog, receivers. It drives `ElevationSession` and publishes `StateFlow<ElevationUiState>`.
 - `ElevationSession` is the pure-JVM domain policy: fix admission, datum policy, duty-cycle flags, epoch guard against a conversion racing a flush. It takes the clock as an argument.
 - `ElevationService` is the rolling average with jump re-anchoring.
+- `SessionPool` folds whole GPS sessions into one pooled height. `BarometricOdometer` turns barometer samples into carried height, with weather left out.
 - `ElevationUiState.derive()` is the only place screen state is decided.
 - `ReadingState` (Acquiring / Converging / Stable / Dormant) drives the settling line and `heroAlpha`.
 - `SerialConversion` feeds fixes through the geoid conversion in order. `AltitudeResolver.resolve` is `@Synchronized`, which serializes calls but does not order them, so ordering comes from the single consumer.
@@ -32,10 +33,12 @@ HeightMark is a single-screen Android app that shows the user's elevation from G
 
 ## Invariants
 
-- **Datum.** One averaging window never mixes `MEAN_SEA_LEVEL` and `ELLIPSOID` heights. `Elevation` carries its datum from `AltitudeResolver` to the hero number, so an unconverted fallback can never pass as sea level. Once a fix converts to MSL, later ellipsoid fixes are dropped. A device that never converts averages ellipsoid heights and labels them so. The ellipsoid → MSL switch flushes the window. A background-gap reset clears the "sea level measured" latch; a duty-cycle `wake()` flushes but keeps it.
-- **Idle has one owner.** `ElevationSession.isIdle` is the only record of idleness. Anything that turns GPS on checks it first (`startLocationUpdates()` returns early while idle). `onBlocked()` ends idle with a flush.
+- **Datum.** One averaging window never mixes `MEAN_SEA_LEVEL` and `ELLIPSOID` heights. `Elevation` carries its datum from `AltitudeResolver` to the hero number, so an unconverted fallback can never pass as sea level. Once a fix converts to MSL, later ellipsoid fixes are dropped. A device that never converts averages ellipsoid heights and labels them so. The ellipsoid → MSL switch flushes the window. A background-gap reset clears the "sea level measured" latch. A duty-cycle `wake()` keeps it.
+- **Idle has one owner.** `ElevationSession.isIdle` is the only record of idleness. Anything that turns GPS on checks it first (`startLocationUpdates()` returns early while idle). `onBlocked()` ends idle the way a wake does.
 - **Threading.** `ElevationTracker` and `ElevationSession` are main-thread confined.
 - **Conversion lifetime.** `SerialConversion` starts in `startLocationUpdates()` and stops only in `onBackground()`/`onCleared()`, never in `stopLocationUpdates()`. The fix that tips the stillness detector into idle is still converted after the radio is off.
+- **Pooled sessions.** One GPS session (radio on to radio off, or each `FOLD_INTERVAL_NANOS` of a long one) is one measurement. `SessionPool` folds it into the pool instead of replacing the reading. A fresh window never replaces a pooled reading unless it refutes the pool beyond `GATE_SIGMA` over `MIN_REFUTING_READINGS` fixes. Wakes, blocks and background gaps keep the pool. A datum switch and a `PRESSURE_CHANGE` wake with no barometer stream discard it.
+- **Barometer frame.** Window and pool hold heights minus `BarometricOdometer.motionMeters` at commit time. The screen adds the odometer back. The barometer listener runs whenever the tracker is foreground, radio on or off. While the odometer is still, pressure change is weather and never moves the reading.
 - **Signal loss.** `onFixWatchdogExpired()` (timeout: `FIX_WATCHDOG_TIMEOUT_MS`) forces `Dormant` without discarding the window. A flush discards it.
 - **First launch.** The system permission dialog never auto-fires on a true first launch. The blocked screen is the rationale, and `LocationPermissionHandler.requestPermissions()` is the one choke point that marks `hasRequestedLocationPermission`. A returning, permanently denied user gets the silent auto-fire fallback.
 - **Derive-time clock.** `nowElapsedRealtimeNanos` is stamped in `derive()` so a bare fix-age tick is a distinct `StateFlow` value.
