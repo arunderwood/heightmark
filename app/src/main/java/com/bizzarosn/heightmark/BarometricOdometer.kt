@@ -54,6 +54,10 @@ class BarometricOdometer(
     var isMoving: Boolean = false
         private set
 
+    /** The latest reading's [standardAltitude], in meters; null before the first. */
+    val standardAltitudeMeters: Double?
+        get() = last?.altitudeMeters
+
     private data class Reading(val atNanos: Long, val altitudeMeters: Double)
 
     private val window = ArrayDeque<Reading>()
