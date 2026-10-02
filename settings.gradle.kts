@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "HeightMark"
 include(":app")
+include(":baselineprofile")
  

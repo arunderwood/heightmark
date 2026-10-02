@@ -20,6 +20,10 @@ mockk = "1.14.11"
 coreSplashscreen = "1.2.0"
 accessibilityTestFramework = "4.1.1"
 composeBom = "2026.09.00"
+# Macrobenchmark and the Baseline Profile Gradle plugin release together.
+benchmark = "1.5.0"
+uiautomator = "2.4.0"
+profileinstaller = "1.4.1"
 # The project's Kotlin version. The Compose compiler plugin below puts
 # kotlin-gradle-plugin at this version on the build classpath, which overrides
 # the one AGP's built-in Kotlin bundles (./gradlew buildEnvironment shows the
@@ -59,9 +63,17 @@ androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", versi
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+# Applies the baseline profile on installs that bypass Play (sideload,
+# Obtainium, F-Droid). Compose pulls it in already; the explicit pin lets
+# Dependabot bump it.
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidTest = { id = "com.android.test", version.ref = "agp" }
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "benchmark" }
 hiltAndroid = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlinCompose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

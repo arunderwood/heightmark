@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.hiltAndroid)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlinCompose)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Release signing material, present only in CI. Absent locally, which leaves
@@ -150,6 +151,13 @@ android {
     }
 }
 
+baselineProfile {
+    // The profile in src/release/generated/baselineProfiles is committed.
+    // Release builds, CI and F-Droid-style source builds read that file and
+    // never boot an emulator to regenerate it.
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
@@ -165,6 +173,8 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
 
     // Hilt
     implementation(libs.hilt.android)

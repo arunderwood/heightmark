@@ -33,7 +33,7 @@ Revert on `main` (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a mer
 - Triggers on push to `main` and on all PRs, with no base-branch filter, so stacked PRs get the gates.
 - PR runs cancel when superseded. `main` runs get a group per commit so none is cancelled.
 - Every job sets `timeout-minutes`.
-- **build-and-test** runs `lintDebug testDebugUnitTest assembleDebug assembleRelease` in one job. `assembleRelease` exercises R8 and resource shrinking on every PR. It is unsigned there and never uploaded.
+- **build-and-test** runs `lintDebug testDebugUnitTest assembleDebug assembleRelease` in one job. `assembleRelease` exercises R8 and resource shrinking on every PR. It is unsigned there and never uploaded. The same job compiles `:baselineprofile`, which no other task builds. No CI job generates the baseline profile or runs `StartupBenchmark`.
 - **instrumented-tests** is a matrix with one job per Gradle Managed Device (`pixel8proapi36`, `pixel8proapi35`), with KVM and `swiftshader_indirect`, so the devices test in parallel. It has no `needs:` on job 1. Each device has its own cache entry. The `instrumented-tests-gate` job, named `Instrumented Tests`, is the required status check in the `main` ruleset: it runs with `if: always()` and fails unless every device job succeeded.
 - Both jobs use `setup-gradle`'s default cache mode (writes on `main`, read-only on PRs). The managed-device cache is restored everywhere and saved only on `main`.
 - No job scans dependencies for advisories. Dependabot alerts and security updates cover that. Do not add a Trivy `fs` scan: Trivy finds Gradle dependencies only through a committed `gradle.lockfile`, which this repo lacks, so it reports zero findings.

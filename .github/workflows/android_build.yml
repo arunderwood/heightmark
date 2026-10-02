@@ -57,7 +57,12 @@ jobs:
           # assembleRelease is the PR gate on R8 and resource shrinking, which no
           # debug task exercises. This job has no signing secrets, so the release
           # APK it produces is unsigned and is never uploaded.
-          ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease
+          #
+          # :baselineprofile has no debug or release variant, so none of the
+          # other tasks build it. Compiling it catches a Macrobenchmark or
+          # UiAutomator bump that breaks the generator. It needs no emulator
+          # and no :app task.
+          ./gradlew lintDebug testDebugUnitTest assembleDebug assembleRelease :baselineprofile:compileNonMinifiedReleaseKotlin
         
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
