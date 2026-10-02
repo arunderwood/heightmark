@@ -64,7 +64,7 @@ class ElevationFragment : Fragment() {
             fragment = this,
             onPermissionStateChanged = { state -> tracker.onPermissionState(state) },
             hasShownUpgradeDialog = { tracker.upgradeDialogShown },
-            onUpgradeDialogShown = { tracker.upgradeDialogShown = true },
+            onUpgradeDialogShown = { tracker.markUpgradeDialogShown() },
             hasRequestedPermissionBefore = { hasRequestedLocationPermission },
             onPermissionRequested = ::markPermissionRequested
         )
@@ -86,9 +86,9 @@ class ElevationFragment : Fragment() {
         detailsPanel = view.findViewById(R.id.details_panel)
         val unitToggleGroup = view.findViewById<MaterialButtonToggleGroup>(R.id.unit_toggle_group)
 
-        // With the BottomNavigationView gone, nothing else consumes the
-        // navigation-bar inset; the scrim column now absorbs it itself so the
-        // details toggle doesn't end up under the gesture bar.
+        // Nothing else consumes the navigation-bar inset, so the scrim column
+        // absorbs it itself; otherwise the details toggle sits under the
+        // gesture bar.
         val contentContainer = view.findViewById<View>(R.id.content_container)
         val initialPaddingLeft = contentContainer.paddingLeft
         val initialPaddingRight = contentContainer.paddingRight
@@ -130,6 +130,12 @@ class ElevationFragment : Fragment() {
             val show = !showDetails
             applyDetailsVisibility(show)
             lifecycleScope.launch { preferencesRepository.setShowDetails(show) }
+        }
+
+        // Reads the action at click time so the listener is installed once;
+        // with the details panel open, state republishes every second
+        blockedActionButton.setOnClickListener {
+            tracker.uiState.value.blockedAction?.let(::performBlockedAction)
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -343,7 +349,6 @@ class ElevationFragment : Fragment() {
         }
         blockedActionButton.isVisible = true
         blockedActionButton.setText(action.labelRes)
-        blockedActionButton.setOnClickListener { performBlockedAction(action) }
     }
 
     private fun performBlockedAction(action: ElevationUiState.BlockedAction) {

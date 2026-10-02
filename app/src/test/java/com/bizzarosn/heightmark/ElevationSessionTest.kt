@@ -236,6 +236,36 @@ class ElevationSessionTest {
     }
 
     @Test
+    fun `blocking an idle session ends idle and flushes the window`() {
+        addReading(100.0)
+        session.enterIdle()
+        session.onBlocked()
+
+        assertFalse(session.isIdle)
+        assertEquals(0, session.readingCount)
+        assertEquals(100.0, session.displayedElevation!!.meters, 1e-9)
+    }
+
+    @Test
+    fun `the first fix after blocking an idle session clears the dormant state`() {
+        addReading(100.0)
+        session.enterIdle()
+        session.onBlocked()
+        addReading(250.0)
+
+        assertEquals(ReadingState.Converging(1f / WINDOW_SIZE), session.readingState())
+    }
+
+    @Test
+    fun `blocking an active session keeps its averaging window`() {
+        addReading(100.0)
+        session.onBlocked()
+
+        assertEquals(1, session.readingCount)
+        assertEquals(ReadingState.Converging(1f / WINDOW_SIZE), session.readingState())
+    }
+
+    @Test
     fun `the next fix after a wake clears the dormant state`() {
         addReading(100.0)
         session.wake()
@@ -301,8 +331,8 @@ class ElevationSessionTest {
         session.onPaused(0L)
         session.onResumed(RESET_AFTER_GAP_MS + 1)
 
-        // Geoid conversion never comes back this time, so the window that
-        // used to be refused now has to carry the reading on its own datum
+        // With geoid conversion still failing after the reset, the window has
+        // to carry the reading on the ellipsoid datum
         assertTrue(addReading(50.0, datum = ELLIPSOID))
         assertTrue(addReading(52.0, datum = ELLIPSOID))
 

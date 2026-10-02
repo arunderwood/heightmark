@@ -34,8 +34,8 @@ import javax.inject.Inject
  * feeds. It drives the pure policy in [ElevationSession] and publishes a
  * single [ElevationUiState] for hosts to render.
  *
- * A [ViewModel] because the session outlives the view: a rotation no longer
- * restarts the averaging window or re-acquires a fix. The host still owns when
+ * A [ViewModel] because the session outlives the view: a rotation keeps the
+ * averaging window and the fix instead of restarting either. The host owns when
  * tracking may run — [onForeground] and [onBackground] bracket every radio,
  * sensor and receiver this class holds, so nothing keeps drawing power behind
  * a screen the user has left.
@@ -94,7 +94,12 @@ class ElevationTracker @Inject constructor(
      * (rotation, dark-mode switch); this ViewModel survives those and dies
      * only with the session, matching the "once per session" intent.
      */
-    var upgradeDialogShown = false
+    var upgradeDialogShown: Boolean = false
+        private set
+
+    fun markUpgradeDialogShown() {
+        upgradeDialogShown = true
+    }
 
     private val providersChangedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -186,6 +191,11 @@ class ElevationTracker @Inject constructor(
             block(ElevationUiState.Blocked.LocationServicesOff)
             return
         }
+
+        // While idle the radio is off on purpose and IdleWakeMonitor owns the
+        // way back. Starting GPS here would run both at once, and goIdle
+        // returns early while the monitor is armed, so the radio would stay on.
+        if (session.isIdle) return
 
         val listener = locationListener
             ?: LocationListener { location -> onGnssFix(location) }
@@ -316,6 +326,10 @@ class ElevationTracker @Inject constructor(
     private fun block(reason: ElevationUiState.Blocked) {
         updateBlocked(reason)
         stopLocationUpdates()
+        // Where the device is when tracking resumes is unknown, so stillness
+        // gathered before the outage no longer applies
+        session.onBlocked()
+        stillnessDetector.reset()
         publish()
     }
 
