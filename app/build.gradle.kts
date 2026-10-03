@@ -141,6 +141,14 @@ android {
         includeInApk = false
         includeInBundle = true
     }
+    // AGP strips native libraries only when an NDK is installed, so
+    // stripping would make the release APK differ between build machines.
+    // Unstripped, the AAR libraries ship as published, for about 9 KB.
+    packaging {
+        jniLibs {
+            keepDebugSymbols += "**/*.so"
+        }
+    }
     lint {
         // Severities live in lint.xml, where the whole Accessibility category
         // is promoted to error; abortOnError (the AGP default, made explicit)

@@ -37,15 +37,13 @@ jobs:
         with:
           persist-credentials: false
         
-      # Must satisfy toolchainVersion AND toolchainVendor in
-      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
-      # provisions its own. Changing distribution here requires updating that
-      # file too.
-      - name: Set up JDK 21
+      # .tool-versions sets the exact JDK and its vendor, for CI and asdf alike.
+      # It must satisfy toolchainVersion and toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle provisions its own JDK.
+      - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version-file: .tool-versions
           
       # The default is read-only off main, so PRs restore main's Gradle cache
       # without adding their own entries to the repo's 10 GB cache quota.
@@ -117,15 +115,13 @@ jobs:
         with:
           persist-credentials: false
 
-      # Must satisfy toolchainVersion AND toolchainVendor in
-      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
-      # provisions its own. Changing distribution here requires updating that
-      # file too.
-      - name: Set up JDK 21
+      # .tool-versions sets the exact JDK and its vendor, for CI and asdf alike.
+      # It must satisfy toolchainVersion and toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle provisions its own JDK.
+      - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version-file: .tool-versions
 
       # The default mode, like build-and-test: writes on main, read-only on PRs.
       # This job resolves dependencies no other job does, such as the UTP test

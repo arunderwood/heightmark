@@ -35,6 +35,22 @@ The Play Store build uses a different key, so switching between the two needs an
 
 Location never leaves your device. The app declares no `INTERNET` permission, so it cannot make network requests at all — there are no analytics, no ads, and no third-party services. See [PRIVACY.md](PRIVACY.md).
 
+## Appendix: rebuild a release
+
+Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 21, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
+
+```bash
+v=1.0.180   # the release to check
+gh release download "v$v" -R arunderwood/heightmark -p '*.apk'
+aapt2=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/aapt2
+code=$("$aapt2" dump badging "heightmark-v$v.apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+git clone https://github.com/arunderwood/heightmark && cd heightmark && git checkout "v$v"
+./gradlew assembleRelease -PversionName="$v" -PversionCode="$code"
+apksigcopier compare "../heightmark-v$v.apk" --unsigned app/build/outputs/apk/release/app-release-unsigned.apk && echo reproduced
+```
+
+Older releases stripped their native libraries with the build machine's NDK, so they do not match.
+
 ## License
 
 [MIT](LICENSE)
