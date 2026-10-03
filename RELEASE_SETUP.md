@@ -72,14 +72,9 @@ Setup:
 
 ## Reproducible builds
 
-The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. Before publishing, `release.yml` rebuilds the sideload APK on a second runner with no NDK and no Gradle cache. It then compares the rebuild with the signed APK using `apksigcopier`. If they differ, the workflow creates no tag, attestation or GitHub release. The Play upload has already happened by then.
+A rebuild of a release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release APK byte for byte, apart from its signature. `Readme.md` has the user steps. `release.yml` enforces it before anything ships: a `rebuild` job builds the APK again on a second runner, with no NDK and no Gradle cache, and `verify-reproducible` must pass before the Play upload and the GitHub release.
 
-What keeps it reproducible:
-
-- Native libraries ship unstripped (`packaging.jniLibs.keepDebugSymbols` in `app/build.gradle.kts`). AGP strips them only when an NDK is installed, so stripping would make the bytes depend on the build machine.
-- The baseline profile is a committed input. CI never regenerates it.
-- AGP, Gradle and every dependency are pinned. The JDK major version is pinned. Builds with Temurin 21.0.9, Temurin 21.0.12 and Debian's OpenJDK 21.0.12.1 produced identical dex.
-- AGP records the commit hash in `META-INF/version-control-info.textproto`. Rebuilders build from a git clone at the release tag.
+It stays reproducible because native libraries ship unstripped (`keepDebugSymbols`), the baseline profile is committed, and AGP, Gradle, the JDK major version and every dependency are pinned.
 
 ## Package Name Configuration
 
@@ -109,7 +104,7 @@ Every merge to `main` that passes CI produces a release:
 1. The merge triggers the "Android CI" workflow on `main` (lint, unit tests, `assembleDebug`, `assembleRelease`, and instrumented tests).
 2. When "Android CI" completes **successfully** on `main`, `release.yml` starts via a `workflow_run` trigger. A failed CI run releases nothing.
 3. `release.yml` computes the version itself from its own `run_number` — `versionCode = 10000 + run_number`, `versionName = "1.0.<run_number>"` — and passes them to Gradle as `-PversionCode` / `-PversionName`. The values in `app/build.gradle.kts` (`versionCode 4`, `versionName "1.0.0-dev"`) are only local-build fallbacks; editing them has no effect on releases.
-4. The signed AAB is uploaded to the Play Store `internal` track. A separate `publish` job then attests the AAB and the sideload APK and creates a GitHub release, tagged `v<versionName>`, with auto-generated notes and both files attached. The tag is an *output* of the release, not its trigger.
+4. Once the reproducibility gate passes, the signed AAB is uploaded to the Play Store `internal` track. A separate `publish` job then attests the AAB and the sideload APK and creates a GitHub release, tagged `v<versionName>`, with auto-generated notes and both files attached. The tag is an *output* of the release, not its trigger.
 
 The only thing worth editing by hand before a release is the release notes in `metadata/whatsnew/whatsnew-en-US`, which the workflow passes to Play as `whatsNewDirectory`.
 
@@ -123,7 +118,7 @@ To change the major/minor version, edit `BASE_CODE` and `VERSION_PREFIX` in `rel
 - **Serialization**: a `play-store-release` concurrency group keeps releases sequential, because the Play Publishing API allows only one open edit per app
 - **Play Store Upload**: uploads the AAB to the `internal` track with `inAppUpdatePriority: 2`
 - **Sideload APK**: `assembleRelease` with the sideload key, checked against the pinned certificate before anything is published
-- **Reproducibility gate**: a `rebuild` job builds the sideload APK again in parallel, and `verify-reproducible` must pass before `publish` runs
+- **Reproducibility gate**: a parallel `rebuild` job and `verify-reproducible` must pass before the Play upload and the GitHub release
 - **GitHub Release**: a separate `publish` job attests both files with `actions/attest` and creates a tagged release with auto-generated notes, the APK, and the AAB. It holds the write and `id-token` permissions, so the third-party Play action never does
 - **Artifact Storage**: uploads the AAB and APK as a workflow artifact for 30 days
 

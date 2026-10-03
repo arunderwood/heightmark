@@ -12,12 +12,12 @@ Mechanism detail for a single workflow step lives in a YAML comment next to that
 
 - Every merge to `main` releases if CI passes. `release.yml` triggers through `workflow_run` when "Android CI" completes successfully for a push to `main`.
 - `check-tip` gates the release. Its `if:` requires `workflow_run.event == 'push'` from this repository, because the `branches` filter matches the triggering run's head branch and a fork PR from a branch named `main` would pass it. It releases only `main`'s tip: a superseded commit is skipped with a `::notice::`, since the newer commit ships its changes.
-- The release job checks out `workflow_run.head_sha` (the commit CI tested), builds a signed AAB and uploads it to the Play **internal** track. It also builds a sideload APK signed with a dedicated key that must match `EXPECTED_CERT_SHA256`.
+- The release job checks out `workflow_run.head_sha` (the commit CI tested) and builds a signed AAB and a sideload APK. The APK's signer must match `EXPECTED_CERT_SHA256`.
 - A separate `publish` job is the only one with write and `id-token` permissions. It attests both files and creates the GitHub release at that SHA.
-- `check-tip` computes the version, so `release` and `rebuild` build with the same `-P` values. `rebuild` runs beside `release` on a second runner: another checkout path, no Gradle cache, NDK hidden. `verify-reproducible` runs `apksigcopier compare` on the signed sideload APK and the rebuild, and `publish` needs it. A non-reproducible APK gets no tag, attestation or GitHub release. The Play upload in `release` has already happened by then. Fix the cause on `main`. Do not loosen the comparison.
-- `apksigcopier` installs from PyPI, so it runs only in `verify-reproducible`, which has no token permissions. Keep it out of `publish`.
+- `rebuild` builds the sideload APK again beside `release`, with the version `check-tip` computed, no Gradle cache and the NDK hidden. `verify-reproducible` (no token permissions, because `apksigcopier` comes from PyPI) runs `apksigcopier compare`. `upload-play` and then `publish` need it, so a non-reproducible build ships nowhere. Fix the cause on `main`. Do not loosen the comparison.
+- `upload-play` holds only the Play service-account secret, so the third-party Play action never shares a job with the signing keys or a write token.
 - Concurrency group `play-store-release` serializes releases, because Play allows one open edit.
-- Keep reproducibility checks off PR builds. In `release.yml` the rebuild runs in parallel, never in series with the release job. Do not use macOS runners for either, because they are slow and often unavailable.
+- Keep reproducibility checks off PR builds, keep the rebuild parallel to `release`, and use no macOS runners. They are slow and often unavailable.
 - Obtainium tracks the GitHub releases with no config: tag `v<versionName>` matches versionName, and each release has one APK.
 - The sideload fingerprint appears in `release.yml` and `Readme.md` and must match in both. Never rotate the sideload key.
 - Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Both keystores decode to `$RUNNER_TEMP`, outside the workspace.

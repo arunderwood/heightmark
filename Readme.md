@@ -18,21 +18,7 @@ com.bizzarosn.heightmark
 21:71:C5:4B:AD:49:79:4A:3B:C3:57:A6:2B:14:9C:DB:9C:08:A8:C0:65:82:EB:CB:BA:53:90:A6:95:A3:A8:68
 ```
 
-Each APK also has a build provenance attestation: `gh attestation verify heightmark-v<version>.apk -R arunderwood/heightmark`. It shows that GitHub Actions built the APK from this repository.
-
-**Rebuild it yourself.** The release APK is reproducible: anyone who builds the tagged commit gets the same bytes, apart from the signature. That check trusts neither the maintainer nor GitHub. You need JDK 21, the Android SDK, and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records the commit it came from.
-
-```bash
-v=1.0.180   # the release to check
-gh release download "v$v" -R arunderwood/heightmark -p '*.apk'
-aapt2=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/aapt2
-code=$("$aapt2" dump badging "heightmark-v$v.apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
-git clone https://github.com/arunderwood/heightmark && cd heightmark && git checkout "v$v"
-./gradlew assembleRelease -PversionName="$v" -PversionCode="$code"
-apksigcopier compare "../heightmark-v$v.apk" --unsigned app/build/outputs/apk/release/app-release-unsigned.apk && echo reproduced
-```
-
-`apksigcopier compare` copies the signature from the release APK onto your build and checks that the result is byte-identical. Older releases shipped native libraries stripped by the build machine's NDK. A rebuild of one of those differs in its `.so` files, so check it with the attestation instead.
+Each APK also has a build provenance attestation: `gh attestation verify heightmark-v<version>.apk -R arunderwood/heightmark`.
 
 The Play Store build uses a different key, so switching between the two needs an uninstall.
 
@@ -48,6 +34,22 @@ The Play Store build uses a different key, so switching between the two needs an
 ## Privacy
 
 Location never leaves your device. The app declares no `INTERNET` permission, so it cannot make network requests at all — there are no analytics, no ads, and no third-party services. See [PRIVACY.md](PRIVACY.md).
+
+## Appendix: rebuild a release
+
+Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 21, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
+
+```bash
+v=1.0.180   # the release to check
+gh release download "v$v" -R arunderwood/heightmark -p '*.apk'
+aapt2=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)/aapt2
+code=$("$aapt2" dump badging "heightmark-v$v.apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+git clone https://github.com/arunderwood/heightmark && cd heightmark && git checkout "v$v"
+./gradlew assembleRelease -PversionName="$v" -PversionCode="$code"
+apksigcopier compare "../heightmark-v$v.apk" --unsigned app/build/outputs/apk/release/app-release-unsigned.apk && echo reproduced
+```
+
+Older releases stripped their native libraries with the build machine's NDK, so they do not match.
 
 ## License
 

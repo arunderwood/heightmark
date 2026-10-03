@@ -141,12 +141,9 @@ android {
         includeInApk = false
         includeInBundle = true
     }
-    // The release APK is reproducible: a rebuild of the same commit yields
-    // the same bytes. AGP strips native libraries with the NDK's llvm-strip
-    // when an NDK is installed and packages them unstripped when none is,
-    // so stripping would make the APK depend on the build machine's SDK.
-    // The only native code comes from AARs, and it ships exactly as
-    // published, at a cost of about 9 KB.
+    // AGP strips native libraries only when an NDK is installed, so
+    // stripping would make the release APK differ between build machines.
+    // Unstripped, the AAR libraries ship as published, for about 9 KB.
     packaging {
         jniLibs {
             keepDebugSymbols += "**/*.so"
