@@ -72,7 +72,7 @@ Setup:
 
 ## Reproducible builds
 
-The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. The `Reproducible Release APK` CI job rebuilds on macOS and compares with the Linux build on every PR and every push to `main`.
+The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. After each release, `verify-release.yml` rebuilds the tag on a runner with no NDK and no Gradle cache, and compares the result with the GitHub release APK using `apksigcopier`. A failed run means that release is not reproducible. To re-check any release, run the workflow by hand with its tag.
 
 What keeps it reproducible:
 

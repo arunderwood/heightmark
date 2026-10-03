@@ -1,0 +1,147 @@
+name: Verify Reproducible Release
+
+# Rebuilds a published release from its tag and requires the result to match
+# the GitHub release APK, apart from the signature. These are the Readme's
+# user verification steps. It runs after the release, in a workflow of its
+# own, so neither PR checks nor the release wait for it. A failure means that
+# release is not reproducible; fix the cause on main.
+#
+# workflow_run fires only after "Release to Google Play Store" completes. The
+# job's `if:` admits only runs from this repository, the token is read-only,
+# no secret is in scope, and the build checks out a tag that release.yml
+# created.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: ["Release to Google Play Store"]
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to verify, such as v1.0.180
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Rebuild and compare release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    permissions:
+      contents: read
+    steps:
+      # release.yml tags the commit its CI run tested, which is the head_sha of
+      # the release run that triggered this one. A release run whose commit was
+      # superseded publishes nothing, so no release matches it.
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="$INPUT_TAG"
+          if [ -z "$tag" ]; then
+            tag=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+              --jq "[.[] | select(.target_commitish == \"$HEAD_SHA\")][0].tag_name // empty")
+          fi
+          if [ -z "$tag" ]; then
+            echo "::notice title=Nothing to verify::No release targets ${HEAD_SHA:0:7}."
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout the release tag
+        if: steps.release.outputs.tag != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          persist-credentials: false
+          path: rebuild/heightmark
+
+      # Must satisfy toolchainVersion AND toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
+      # provisions its own. Changing distribution here requires updating that
+      # file too.
+      - name: Set up JDK 21
+        if: steps.release.outputs.tag != ''
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # No cache: every task runs and every dependency downloads, as on a
+      # rebuilder's machine.
+      - name: Setup Gradle
+        if: steps.release.outputs.tag != ''
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-disabled: true
+
+      # The release was built on a runner with NDKs installed. Hiding them
+      # here checks that the APK does not depend on an NDK being present. A
+      # rename within the SDK directory is instant.
+      - name: Hide the NDK
+        if: steps.release.outputs.tag != ''
+        run: |
+          for dir in ndk ndk-bundle; do
+            if [ -e "$ANDROID_HOME/$dir" ]; then
+              sudo mv "$ANDROID_HOME/$dir" "$ANDROID_HOME/$dir.hidden"
+            fi
+          done
+
+      - name: Download the release APK
+        if: steps.release.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.apk' -D "$RUNNER_TEMP/release"
+
+      # versionCode is read from the APK itself, so this step needs no copy of
+      # release.yml's BASE_CODE.
+      - name: Build unsigned release APK
+        if: steps.release.outputs.tag != ''
+        working-directory: rebuild/heightmark
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          apk=$(ls "$RUNNER_TEMP"/release/*.apk)
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          code=$("$build_tools/aapt2" dump badging "$apk" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p")
+          ./gradlew assembleRelease -PversionName="${TAG#v}" -PversionCode="$code"
+
+      - name: Compare with the release APK
+        if: steps.release.outputs.tag != ''
+        working-directory: rebuild/heightmark
+        run: |
+          pip install --quiet apksigcopier==1.1.1
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          export PATH="$build_tools:$PATH"
+          released=$(ls "$RUNNER_TEMP"/release/*.apk)
+          rebuilt=app/build/outputs/apk/release/app-release-unsigned.apk
+          if apksigcopier compare "$released" --unsigned "$rebuilt"; then
+            echo "Reproduced $(basename "$released")"
+            exit 0
+          fi
+          # Name the entries that differ. diffoscope gives the full diff.
+          python3 - "$released" "$rebuilt" <<'EOF'
+          import sys, zipfile
+          a, b = (zipfile.ZipFile(p) for p in sys.argv[1:3])
+          ia = {i.filename: i for i in a.infolist()}
+          ib = {i.filename: i for i in b.infolist()}
+          for name in sorted(ia.keys() | ib.keys()):
+              x, y = ia.get(name), ib.get(name)
+              if x is None or y is None:
+                  print(f"only in {'rebuild' if x is None else 'release'}: {name}")
+              elif (x.CRC, x.compress_type) != (y.CRC, y.compress_type):
+                  print(f"differs: {name}")
+          if [i.filename for i in a.infolist()] != [i.filename for i in b.infolist()]:
+              print("entry order differs")
+          EOF
+          echo "::error title=Release is not reproducible::The rebuild of $(basename "$released") differs from the release."
+          exit 1

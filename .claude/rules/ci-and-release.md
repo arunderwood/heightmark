@@ -15,6 +15,8 @@ Mechanism detail for a single workflow step lives in a YAML comment next to that
 - The release job checks out `workflow_run.head_sha` (the commit CI tested), builds a signed AAB and uploads it to the Play **internal** track. It also builds a sideload APK signed with a dedicated key that must match `EXPECTED_CERT_SHA256`.
 - A separate `publish` job is the only one with write and `id-token` permissions. It attests both files and creates the GitHub release at that SHA.
 - Concurrency group `play-store-release` serializes releases, because Play allows one open edit.
+- `verify-release.yml` runs through `workflow_run` after each release. It rebuilds the release tag on Ubuntu with no NDK and no Gradle cache, and runs `apksigcopier compare` against the GitHub release APK. Neither PR checks nor the release wait for it, so reproducibility costs no CI wall clock. A red run means that release is not reproducible: a change made the APK depend on the build machine. Fix the cause on `main`. Do not loosen the comparison. `workflow_dispatch` with a `tag` input re-verifies any release.
+- Keep reproducibility checks off PR builds and out of the release's critical path. Do not run them on macOS runners, which are slow and often unavailable.
 - Obtainium tracks the GitHub releases with no config: tag `v<versionName>` matches versionName, and each release has one APK.
 - The sideload fingerprint appears in `release.yml` and `Readme.md` and must match in both. Never rotate the sideload key.
 - Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Both keystores decode to `$RUNNER_TEMP`, outside the workspace.
@@ -33,10 +35,9 @@ Revert on `main` (`git revert <sha>`, or `git revert -m 1 <merge-sha>` for a mer
 - Triggers on push to `main` and on all PRs, with no base-branch filter, so stacked PRs get the gates.
 - PR runs cancel when superseded. `main` runs get a group per commit so none is cancelled.
 - Every job sets `timeout-minutes`.
-- **build-and-test** runs `lintDebug testDebugUnitTest assembleDebug assembleRelease` in one job. `assembleRelease` exercises R8 and resource shrinking on every PR. It is unsigned there, and is uploaded only for the reproducible-build comparison. The same job compiles `:baselineprofile`, which no other task builds. No CI job generates the baseline profile or runs `StartupBenchmark`.
+- **build-and-test** runs `lintDebug testDebugUnitTest assembleDebug assembleRelease` in one job. `assembleRelease` exercises R8 and resource shrinking on every PR. It is unsigned there and never uploaded. The same job compiles `:baselineprofile`, which no other task builds. No CI job generates the baseline profile or runs `StartupBenchmark`.
 - **instrumented-tests** is a matrix with one job per Gradle Managed Device (`pixel8proapi36`, `pixel8proapi35`), with KVM and `swiftshader_indirect`, so the devices test in parallel. It has no `needs:` on job 1. Each device has its own cache entry. The `instrumented-tests-gate` job, named `Instrumented Tests`, is the required status check in the `main` ruleset: it runs with `if: always()` and fails unless every device job succeeded.
-- **reproducible-build** (`Reproducible Release APK`) needs build-and-test. It rebuilds `assembleRelease` on `macos-latest` with the Gradle cache disabled and fails unless the APK is byte-identical to build-and-test's, which build-and-test uploads as `release-apk-unsigned-linux`. It is not a required check, but its failure on `main` blocks the release like any CI failure. A failure means a change made the release APK depend on the build machine. Fix the cause. Do not loosen the comparison.
-- build-and-test and instrumented-tests use `setup-gradle`'s default cache mode (writes on `main`, read-only on PRs). The managed-device cache is restored everywhere and saved only on `main`.
+- Both jobs use `setup-gradle`'s default cache mode (writes on `main`, read-only on PRs). The managed-device cache is restored everywhere and saved only on `main`.
 - No job scans dependencies for advisories. Dependabot alerts and security updates cover that. Do not add a Trivy `fs` scan: Trivy finds Gradle dependencies only through a committed `gradle.lockfile`, which this repo lacks, so it reports zero findings.
 
 ## Gradle flags
