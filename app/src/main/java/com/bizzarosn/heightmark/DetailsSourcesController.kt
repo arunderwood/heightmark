@@ -54,10 +54,8 @@ class DetailsSourcesController(
         }
 
         if (pressureListener == null) {
-            // The panel repaints on a 1 s ticker anyway, so UI rate is plenty —
-            // IdleWakeMonitor samples the same sensor faster to catch elevators
             pressureListener = sensorManager.registerPressureListener(
-                SensorManager.SENSOR_DELAY_UI
+                PRESSURE_SAMPLING_PERIOD_US
             ) { hpa, _ -> pressureHpa = hpa }
         }
 
@@ -88,5 +86,8 @@ class DetailsSourcesController(
     companion object {
         private const val TAG = "DetailsSources"
         private const val TICK_INTERVAL_MS = 1_000L
+
+        /** One sample per repaint of the 1 s ticker; the panel shows nothing faster. */
+        private const val PRESSURE_SAMPLING_PERIOD_US = 1_000_000
     }
 }
