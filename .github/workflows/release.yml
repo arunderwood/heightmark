@@ -42,6 +42,8 @@ jobs:
       contents: read
     outputs:
       current: ${{ steps.tip.outputs.current }}
+      version-name: ${{ steps.version.outputs.name }}
+      version-code: ${{ steps.version.outputs.code }}
     steps:
       - name: Compare with main
         id: tip
@@ -57,26 +59,7 @@ jobs:
             echo "current=false" >> "$GITHUB_OUTPUT"
           fi
 
-  release:
-    name: Build & Release to Play Store
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: check-tip
-    if: needs.check-tip.outputs.current == 'true'
-    permissions:
-      contents: read
-    outputs:
-      version: ${{ steps.version.outputs.name }}
-
-    steps:
-      # Build the commit CI tested. The workflow_run default is the newest main
-      # commit, which may not have passed CI yet.
-      - name: Checkout code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          persist-credentials: false
-
+      # Computed once here so the release and the rebuild get the same values.
       - name: Calculate version
         id: version
         run: |
@@ -90,6 +73,27 @@ jobs:
           echo "code=${VERSION_CODE}" >> "$GITHUB_OUTPUT"
           echo "name=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "📦 Building version: ${VERSION_NAME} (versionCode: ${VERSION_CODE})"
+
+  release:
+    name: Build & Release to Play Store
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check-tip
+    if: needs.check-tip.outputs.current == 'true'
+    permissions:
+      contents: read
+    env:
+      VERSION_NAME: ${{ needs.check-tip.outputs.version-name }}
+      VERSION_CODE: ${{ needs.check-tip.outputs.version-code }}
+
+    steps:
+      # Build the commit CI tested. The workflow_run default is the newest main
+      # commit, which may not have passed CI yet.
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
       # Must satisfy toolchainVersion AND toolchainVendor in
       # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
@@ -119,8 +123,6 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          VERSION_NAME: ${{ steps.version.outputs.name }}
-          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           ./gradlew bundleRelease \
             -PversionName="$VERSION_NAME" \
@@ -140,8 +142,6 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.SIDELOAD_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.SIDELOAD_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.SIDELOAD_KEY_PASSWORD }}
-          VERSION_NAME: ${{ steps.version.outputs.name }}
-          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           ./gradlew assembleRelease \
             -PversionName="$VERSION_NAME" \
@@ -159,7 +159,6 @@ jobs:
       - name: Verify sideload APK signer
         env:
           EXPECTED_CERT_SHA256: "21:71:C5:4B:AD:49:79:4A:3B:C3:57:A6:2B:14:9C:DB:9C:08:A8:C0:65:82:EB:CB:BA:53:90:A6:95:A3:A8:68"
-          VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
           expected=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
           if ! [[ "$expected" =~ ^[0-9a-f]{64}$ ]]; then
@@ -192,10 +191,130 @@ jobs:
       - name: Upload release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-artifacts-v${{ steps.version.outputs.name }}
+          name: release-artifacts-v${{ needs.check-tip.outputs.version-name }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
+
+  # A second build of the sideload APK from the same commit and version, on a
+  # machine that differs where a rebuilder's can: another checkout path, an
+  # empty Gradle home with no build cache, and no NDK. It runs beside the
+  # release job, so it adds little to the release's wall clock.
+  rebuild:
+    name: Rebuild sideload APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: check-tip
+    if: needs.check-tip.outputs.current == 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+          path: rebuild/heightmark
+
+      # Must satisfy toolchainVersion AND toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
+      # provisions its own. Changing distribution here requires updating that
+      # file too.
+      - name: Set up JDK 21
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # No cache: every task runs and every dependency downloads, so nothing
+      # from the release job or an earlier run can stand in for this build.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-disabled: true
+
+      # The release job's runner has NDKs installed. Hiding them here checks
+      # that the APK does not depend on one being present. A rename within the
+      # SDK directory is instant.
+      - name: Hide the NDK
+        run: |
+          for dir in ndk ndk-bundle; do
+            if [ -e "$ANDROID_HOME/$dir" ]; then
+              sudo mv "$ANDROID_HOME/$dir" "$ANDROID_HOME/$dir.hidden"
+            fi
+          done
+
+      - name: Build unsigned sideload APK
+        working-directory: rebuild/heightmark
+        env:
+          VERSION_NAME: ${{ needs.check-tip.outputs.version-name }}
+          VERSION_CODE: ${{ needs.check-tip.outputs.version-code }}
+        run: |
+          ./gradlew assembleRelease \
+            -PversionName="$VERSION_NAME" \
+            -PversionCode="$VERSION_CODE"
+
+      - name: Upload rebuilt APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rebuilt-apk-v${{ needs.check-tip.outputs.version-name }}
+          path: rebuild/heightmark/app/build/outputs/apk/release/app-release-unsigned.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  # Publishes nothing unless the signed sideload APK is reproducible: its
+  # signature, copied onto the rebuild, must yield the same bytes. This is the
+  # check Readme.md gives users. apksigcopier comes from PyPI, so it runs here,
+  # in a job with no token permissions, and never in publish.
+  verify-reproducible:
+    name: Verify sideload APK is reproducible
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-tip, release, rebuild]
+    permissions: {}
+    env:
+      VERSION_NAME: ${{ needs.check-tip.outputs.version-name }}
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-artifacts-v${{ needs.check-tip.outputs.version-name }}
+          path: dist
+
+      - name: Download rebuilt APK
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: rebuilt-apk-v${{ needs.check-tip.outputs.version-name }}
+          path: rebuilt
+
+      - name: Compare
+        run: |
+          pip install --quiet apksigcopier==1.1.1
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          export PATH="$build_tools:$PATH"
+          signed="dist/heightmark-v${VERSION_NAME}.apk"
+          rebuilt=rebuilt/app-release-unsigned.apk
+          if apksigcopier compare "$signed" --unsigned "$rebuilt"; then
+            echo "Reproduced $(basename "$signed")"
+            exit 0
+          fi
+          # Name the entries that differ. diffoscope gives the full diff.
+          python3 - "$signed" "$rebuilt" <<'EOF'
+          import sys, zipfile
+          a, b = (zipfile.ZipFile(p) for p in sys.argv[1:3])
+          ia = {i.filename: i for i in a.infolist()}
+          ib = {i.filename: i for i in b.infolist()}
+          for name in sorted(ia.keys() | ib.keys()):
+              x, y = ia.get(name), ib.get(name)
+              if x is None or y is None:
+                  print(f"only in {'rebuild' if x is None else 'release'}: {name}")
+              elif (x.CRC, x.compress_type) != (y.CRC, y.compress_type):
+                  print(f"differs: {name}")
+          if [i.filename for i in a.infolist()] != [i.filename for i in b.infolist()]:
+              print("entry order differs")
+          EOF
+          echo "::error title=Sideload APK is not reproducible::The rebuild differs from the signed APK, so no GitHub release is published."
+          exit 1
 
   # A job of its own so the third-party Play upload action never runs where a
   # token can mint attestations or write tags and releases.
@@ -203,7 +322,7 @@ jobs:
     name: Attest & Publish GitHub Release
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: release
+    needs: [check-tip, verify-reproducible]
     permissions:
       contents: write
       id-token: write
@@ -213,7 +332,7 @@ jobs:
       - name: Download release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-artifacts-v${{ needs.release.outputs.version }}
+          name: release-artifacts-v${{ needs.check-tip.outputs.version-name }}
           path: dist
 
       - name: Attest build provenance
@@ -225,7 +344,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
-          VERSION_NAME: ${{ needs.release.outputs.version }}
+          VERSION_NAME: ${{ needs.check-tip.outputs.version-name }}
         run: |
           gh release create "v$VERSION_NAME" \
             --repo="$GITHUB_REPOSITORY" \

@@ -72,7 +72,7 @@ Setup:
 
 ## Reproducible builds
 
-The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. After each release, `verify-release.yml` rebuilds the tag on a runner with no NDK and no Gradle cache, and compares the result with the GitHub release APK using `apksigcopier`. A failed run means that release is not reproducible. To re-check any release, run the workflow by hand with its tag.
+The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. Before publishing, `release.yml` rebuilds the sideload APK on a second runner with no NDK and no Gradle cache. It then compares the rebuild with the signed APK using `apksigcopier`. If they differ, the workflow creates no tag, attestation or GitHub release. The Play upload has already happened by then.
 
 What keeps it reproducible:
 
@@ -123,6 +123,7 @@ To change the major/minor version, edit `BASE_CODE` and `VERSION_PREFIX` in `rel
 - **Serialization**: a `play-store-release` concurrency group keeps releases sequential, because the Play Publishing API allows only one open edit per app
 - **Play Store Upload**: uploads the AAB to the `internal` track with `inAppUpdatePriority: 2`
 - **Sideload APK**: `assembleRelease` with the sideload key, checked against the pinned certificate before anything is published
+- **Reproducibility gate**: a `rebuild` job builds the sideload APK again in parallel, and `verify-reproducible` must pass before `publish` runs
 - **GitHub Release**: a separate `publish` job attests both files with `actions/attest` and creates a tagged release with auto-generated notes, the APK, and the AAB. It holds the write and `id-token` permissions, so the third-party Play action never does
 - **Artifact Storage**: uploads the AAB and APK as a workflow artifact for 30 days
 

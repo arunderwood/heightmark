@@ -14,16 +14,17 @@ Mechanism detail for a single workflow step lives in a YAML comment next to that
 - `check-tip` gates the release. Its `if:` requires `workflow_run.event == 'push'` from this repository, because the `branches` filter matches the triggering run's head branch and a fork PR from a branch named `main` would pass it. It releases only `main`'s tip: a superseded commit is skipped with a `::notice::`, since the newer commit ships its changes.
 - The release job checks out `workflow_run.head_sha` (the commit CI tested), builds a signed AAB and uploads it to the Play **internal** track. It also builds a sideload APK signed with a dedicated key that must match `EXPECTED_CERT_SHA256`.
 - A separate `publish` job is the only one with write and `id-token` permissions. It attests both files and creates the GitHub release at that SHA.
+- `check-tip` computes the version, so `release` and `rebuild` build with the same `-P` values. `rebuild` runs beside `release` on a second runner: another checkout path, no Gradle cache, NDK hidden. `verify-reproducible` runs `apksigcopier compare` on the signed sideload APK and the rebuild, and `publish` needs it. A non-reproducible APK gets no tag, attestation or GitHub release. The Play upload in `release` has already happened by then. Fix the cause on `main`. Do not loosen the comparison.
+- `apksigcopier` installs from PyPI, so it runs only in `verify-reproducible`, which has no token permissions. Keep it out of `publish`.
 - Concurrency group `play-store-release` serializes releases, because Play allows one open edit.
-- `verify-release.yml` runs through `workflow_run` after each release. It rebuilds the release tag on Ubuntu with no NDK and no Gradle cache, and runs `apksigcopier compare` against the GitHub release APK. Neither PR checks nor the release wait for it, so reproducibility costs no CI wall clock. A red run means that release is not reproducible: a change made the APK depend on the build machine. Fix the cause on `main`. Do not loosen the comparison. `workflow_dispatch` with a `tag` input re-verifies any release.
-- Keep reproducibility checks off PR builds and out of the release's critical path. Do not run them on macOS runners, which are slow and often unavailable.
+- Keep reproducibility checks off PR builds. In `release.yml` the rebuild runs in parallel, never in series with the release job. Do not use macOS runners for either, because they are slow and often unavailable.
 - Obtainium tracks the GitHub releases with no config: tag `v<versionName>` matches versionName, and each release has one APK.
 - The sideload fingerprint appears in `release.yml` and `Readme.md` and must match in both. Never rotate the sideload key.
 - Release signing reads `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Both keystores decode to `$RUNNER_TEMP`, outside the workspace.
 
 ## Versioning
 
-- `versionCode = BASE_CODE + run_number` (both defined in `release.yml`). `versionName = VERSION_PREFIX.run_number`. `run_number` is the release workflow's own counter.
+- `versionCode = BASE_CODE + run_number` (both defined in `release.yml`'s `check-tip` job). `versionName = VERSION_PREFIX.run_number`. `run_number` is the release workflow's own counter.
 - To bump major or minor, edit `VERSION_PREFIX` and `BASE_CODE` together in `release.yml`, keeping `BASE_CODE` above every versionCode already uploaded to Play.
 
 ## Rollback
