@@ -95,15 +95,13 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
 
-      # Must satisfy toolchainVersion AND toolchainVendor in
-      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
-      # provisions its own. Changing distribution here requires updating that
-      # file too.
-      - name: Set up JDK 21
+      # .tool-versions sets the exact JDK and its vendor, for CI and asdf alike.
+      # It must satisfy toolchainVersion and toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle provisions its own JDK.
+      - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version-file: .tool-versions
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
@@ -208,15 +206,13 @@ jobs:
           persist-credentials: false
           path: rebuild/heightmark
 
-      # Must satisfy toolchainVersion AND toolchainVendor in
-      # gradle/gradle-daemon-jvm.properties, or Gradle ignores this JDK and
-      # provisions its own. Changing distribution here requires updating that
-      # file too.
-      - name: Set up JDK 21
+      # .tool-versions sets the exact JDK and its vendor, for CI and asdf alike.
+      # It must satisfy toolchainVersion and toolchainVendor in
+      # gradle/gradle-daemon-jvm.properties, or Gradle provisions its own JDK.
+      - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          java-version: '21'
-          distribution: 'temurin'
+          java-version-file: rebuild/heightmark/.tool-versions
 
       # No cache: every task runs and every dependency downloads, so nothing
       # from the release job or an earlier run can stand in for this build.
@@ -347,7 +343,7 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/*
+          subject-path: dist/heightmark-v${{ needs.check-tip.outputs.version-name }}.apk
 
       - name: Create GitHub Release
         env:
@@ -360,5 +356,4 @@ jobs:
             --target="$HEAD_SHA" \
             --title="HeightMark v$VERSION_NAME" \
             --generate-notes \
-            "dist/heightmark-v$VERSION_NAME.apk" \
-            dist/app-release.aab
+            "dist/heightmark-v$VERSION_NAME.apk"

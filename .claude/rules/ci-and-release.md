@@ -13,7 +13,7 @@ Mechanism detail for a single workflow step lives in a YAML comment next to that
 - Every merge to `main` releases if CI passes. `release.yml` triggers through `workflow_run` when "Android CI" completes successfully for a push to `main`.
 - `check-tip` gates the release. Its `if:` requires `workflow_run.event == 'push'` from this repository, because the `branches` filter matches the triggering run's head branch and a fork PR from a branch named `main` would pass it. It releases only `main`'s tip: a superseded commit is skipped with a `::notice::`, since the newer commit ships its changes.
 - The release job checks out `workflow_run.head_sha` (the commit CI tested) and builds a signed AAB and a sideload APK. The APK's signer must match `EXPECTED_CERT_SHA256`.
-- A separate `publish` job is the only one with write and `id-token` permissions. It attests both files and creates the GitHub release at that SHA.
+- A separate `publish` job is the only one with write and `id-token` permissions. It attests the sideload APK and creates the GitHub release at that SHA. The AAB goes only to Play, because nothing installs it from GitHub.
 - `rebuild` builds the sideload APK again beside `release`, with the version `check-tip` computed, no Gradle cache and the NDK hidden. `verify-reproducible` (no token permissions, because `apksigcopier` comes from PyPI) runs `apksigcopier compare`. `upload-play` and then `publish` need it, so a non-reproducible build ships nowhere. Fix the cause on `main`. Do not loosen the comparison.
 - `upload-play` holds only the Play service-account secret, so the third-party Play action never shares a job with the signing keys or a write token.
 - Concurrency group `play-store-release` serializes releases, because Play allows one open edit.
