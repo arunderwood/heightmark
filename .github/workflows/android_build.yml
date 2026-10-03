@@ -98,8 +98,8 @@ jobs:
 
   # Rebuilds the release APK on another OS and CPU architecture with an empty
   # Gradle home, then requires it to match build-and-test's APK byte for byte.
-  # F-Droid and other rebuilders verify a signed GitHub release the same way,
-  # so a dependency bump that breaks reproducibility fails here, before merge.
+  # A rebuilder verifies a signed GitHub release the same way, so a dependency
+  # bump that breaks reproducibility fails here, before merge.
   # The macOS image ships the Android SDK.
   reproducible-build:
     name: Reproducible Release APK

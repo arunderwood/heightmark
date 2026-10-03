@@ -70,7 +70,7 @@ Setup:
 2. `keytool -list -v -keystore heightmark-sideload.jks -alias heightmark`, then copy the `SHA256:` line into `EXPECTED_CERT_SHA256` and `Readme.md`. Do not pipe this command: `keytool` echoes the password when its output is not a terminal.
 3. `base64 -i heightmark-sideload.jks | gh secret set SIDELOAD_KEYSTORE_BASE64`, then `gh secret set` the other two.
 
-## Reproducible builds and F-Droid
+## Reproducible builds
 
 The release APK is reproducible. A rebuild of the release commit with the same `-PversionName` and `-PversionCode` matches the GitHub release byte for byte, apart from the APK Signing Block. `Readme.md` has the steps a user runs. The `Reproducible Release APK` CI job rebuilds on macOS and compares with the Linux build on every PR and every push to `main`.
 
@@ -78,54 +78,8 @@ What keeps it reproducible:
 
 - Native libraries ship unstripped (`packaging.jniLibs.keepDebugSymbols` in `app/build.gradle.kts`). AGP strips them only when an NDK is installed, so stripping would make the bytes depend on the build machine.
 - The baseline profile is a committed input. CI never regenerates it.
-- AGP, Gradle and every dependency are pinned. The JDK major version is pinned. Builds with Temurin 21.0.9 and 21.0.12 produced identical dex.
+- AGP, Gradle and every dependency are pinned. The JDK major version is pinned. Builds with Temurin 21.0.9, Temurin 21.0.12 and Debian's OpenJDK 21.0.12.1 produced identical dex.
 - AGP records the commit hash in `META-INF/version-control-info.textproto`. Rebuilders build from a git clone at the release tag.
-
-### F-Droid with the developer signature
-
-F-Droid can publish the sideload APK itself instead of signing its own build. F-Droid builds the tagged commit from source, copies the signature from the GitHub release APK onto its build with `apksigcopier`, and publishes the GitHub APK only if the two match. A mismatch publishes nothing for that version. There is no fallback to an F-Droid signature. Users can then move between F-Droid, Obtainium and GitHub without an uninstall, because every channel except Play has the same signer.
-
-Submission is a merge request to [fdroiddata](https://gitlab.com/fdroid/fdroiddata) that adds `metadata/com.bizzarosn.heightmark.yml`. Run `fdroid lint` and `fdroid build` on it before opening the request. A starting point:
-
-```yaml
-Categories:
-  - Navigation
-License: MIT
-SourceCode: https://github.com/arunderwood/heightmark
-IssueTracker: https://github.com/arunderwood/heightmark/issues
-
-AutoName: HeightMark
-
-RepoType: git
-Repo: https://github.com/arunderwood/heightmark.git
-Binaries: https://github.com/arunderwood/heightmark/releases/download/v%v/heightmark-v%v.apk
-
-Builds:
-  - versionName: 1.0.180
-    versionCode: 10180
-    commit: v1.0.180
-    subdir: app
-    gradle:
-      - yes
-    prebuild: printf 'versionName=$$VERSION$$\nversionCode=$$VERCODE$$\n' >> ../gradle.properties
-
-AllowedAPKSigningKeys: 2171c54bad49794a3bc357a62b149cdb9c08a8c06582ebcbba5390a695a3a868
-
-AutoUpdateMode: Version
-UpdateCheckMode: Tags ^v1\.0\.\d+$
-UpdateCheckData: '|v1\.0\.(\d+)||v(.+)'
-VercodeOperation:
-  - '%c + 10000'
-CurrentVersion: 1.0.180
-CurrentVersionCode: 10180
-```
-
-- The version exists only in `release.yml`, so the recipe derives it from the tag. `prebuild` writes it to `gradle.properties`, because `gradleprops` gets no variable substitution. `VercodeOperation` must track `BASE_CODE`.
-- `AllowedAPKSigningKeys` is the sideload certificate's SHA-256 from `EXPECTED_CERT_SHA256`, in lowercase hex without colons.
-- F-Droid builds on Debian with Debian's OpenJDK 21. Its scanner deletes `gradle/gradle-daemon-jvm.properties`, so the Temurin pin does not apply there.
-- F-Droid reads the store listing from `fastlane/metadata/android/en-US/` (`title.txt`, `short_description.txt`, `full_description.txt`, `images/`). The repository has none yet. `metadata/whatsnew/` is Play-only.
-
-[IzzyOnDroid](https://izzyondroid.org/docs/reproducibleBuilds/EstablishApp/) is a second option. It publishes the GitHub APK and rebuilds each release with its own verifier.
 
 ## Package Name Configuration
 
