@@ -8,11 +8,11 @@ val PROFILE_DEVICE = "pixel8proapi36profile"
 
 android {
     namespace = "com.bizzarosn.heightmark.baselineprofile"
-    compileSdk = 37
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
-        minSdk = 34
-        targetSdk = 37
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Every device this module runs on is a Gradle Managed Device.
         // Emulator timings are fine for comparing two compilation modes on the
