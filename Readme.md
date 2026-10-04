@@ -49,7 +49,7 @@ git clone https://github.com/arunderwood/heightmark && cd heightmark && git chec
 apksigcopier compare "../heightmark-v$v.apk" --unsigned app/build/outputs/apk/release/app-release-unsigned.apk && echo reproduced
 ```
 
-Older releases stripped their native libraries with the build machine's NDK, so they do not match.
+This works for v1.0.175 and later.
 
 ## License
 
