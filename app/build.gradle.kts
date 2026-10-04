@@ -18,12 +18,12 @@ val hasSigningEnv = listOf(
 
 android {
     namespace = "com.bizzarosn.heightmark"
-    compileSdk = 37
+    compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "com.bizzarosn.heightmark"
-        minSdk = 34
-        targetSdk = 37
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
 
         // Support dynamic versioning from CI, with local fallback
         versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 4

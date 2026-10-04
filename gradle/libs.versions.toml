@@ -32,6 +32,11 @@ profileinstaller = "1.4.1"
 # the one AGP's built-in Kotlin bundles (./gradlew buildEnvironment shows the
 # resolution). Lint rejects a pin below the newest release.
 kotlin = "2.4.20"
+# Android SDK levels for every module. Plain integers, not dependencies, so
+# Dependabot leaves them alone. targetSdk follows Play's yearly deadline.
+compileSdk = "37"
+minSdk = "34"
+targetSdk = "37"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
