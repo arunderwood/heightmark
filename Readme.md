@@ -37,7 +37,7 @@ Location never leaves your device. The app declares no `INTERNET` permission, so
 
 ## Appendix: rebuild a release
 
-Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 21, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
+Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 25, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
 
 ```bash
 v=1.0.180   # the release to check
