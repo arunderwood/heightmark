@@ -37,7 +37,7 @@ Location never leaves your device. The app declares no `INTERNET` permission, so
 
 ## Appendix: rebuild a release
 
-Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 21, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
+Release APKs are reproducible. Building the tagged commit gives the same bytes as the GitHub release, apart from the signature. Unlike the attestation, this check trusts neither the maintainer nor GitHub. You need JDK 25, the Android SDK and [apksigcopier](https://github.com/obfusk/apksigcopier). Build from a `git clone`, because the APK records its commit.
 
 ```bash
 v=1.0.180   # the release to check
@@ -49,7 +49,7 @@ git clone https://github.com/arunderwood/heightmark && cd heightmark && git chec
 apksigcopier compare "../heightmark-v$v.apk" --unsigned app/build/outputs/apk/release/app-release-unsigned.apk && echo reproduced
 ```
 
-Older releases stripped their native libraries with the build machine's NDK, so they do not match.
+This works for v1.0.175 and later.
 
 ## License
 
