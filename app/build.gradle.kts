@@ -94,15 +94,17 @@ android {
         // aosp-atd: no Google services, which the app never uses, and a
         // lighter image than google_apis.
         //
-        // API 36 is the newest aosp-atd image Google publishes. Behavior gated
-        // on targetSdk (forced edge-to-edge, default predictive back) only
-        // runs on a device at that API level or above, so this device is the
-        // only one that sees the platform the app targets. Move it up when a
-        // newer aosp-atd image appears.
+        // The two ends of the supported range. API 31 is minSdk, the oldest
+        // platform the app runs on, so it guards against a regression that only
+        // breaks the floor. API 36 is the newest aosp-atd image Google
+        // publishes: behavior gated on targetSdk (forced edge-to-edge, default
+        // predictive back) only runs on a device at that API level or above, so
+        // 36 is the only one that sees the platform the app targets. Move 36 up
+        // when a newer aosp-atd image appears; move 31 only when minSdk moves.
         managedDevices {
             // CI runs one job per device; android_build.yml's matrix must list
             // the same devices.
-            val deviceApiLevels = listOf(35, 36)
+            val deviceApiLevels = listOf(31, 36)
             localDevices {
                 deviceApiLevels.forEach { level ->
                     create("pixel8proapi$level") {
