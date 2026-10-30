@@ -68,6 +68,25 @@ class IdleWakePolicyTest {
     }
 
     @Test
+    fun `vertical movement beyond drift plus accuracy wakes`() {
+        val anchor = idleWakeFix(driftMeters = 0f, altitude = 100.0)
+        // delta 14 > 10 + 3 = 13
+        val fix = idleWakeFix(altitude = 114.0, verticalAccuracy = 3f)
+
+        assertTrue(IdleWakePolicy.shouldWake(anchor, fix))
+    }
+
+    @Test
+    fun `vertical movement within drift plus accuracy margin does not wake`() {
+        val anchor = idleWakeFix(driftMeters = 0f, altitude = 100.0)
+        // delta 12 past the raw 10 m threshold, but 10 + 3 = 13 is not exceeded:
+        // noise within the fix's own accuracy radius must not spin the radio up
+        val fix = idleWakeFix(altitude = 112.0, verticalAccuracy = 3f)
+
+        assertFalse(IdleWakePolicy.shouldWake(anchor, fix))
+    }
+
+    @Test
     fun `vertical movement without vertical accuracy does not wake`() {
         val anchor = idleWakeFix(driftMeters = 0f, altitude = 100.0)
         val fix = idleWakeFix(altitude = 115.0, verticalAccuracy = null)
