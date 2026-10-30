@@ -34,15 +34,15 @@ profileinstaller = "1.4.1"
 kotlin = "2.4.21"
 # Android SDK levels for every module. Plain integers, not dependencies, so
 # Dependabot leaves them alone. targetSdk follows Play's yearly deadline.
-# minSdk is the code's real floor, not a default: LocationRequest.Builder,
-# LocationManager.hasProvider and the Executor requestLocationUpdates overload
-# are all API 31, and the app carries no SDK_INT guards or compat wrappers below
-# that, so lint (NewApi, warningsAsErrors) would catch any lower call. API 31
-# keeps the F-Droid / de-googled-AOSP audience in reach (devices kept alive past
-# OEM support cluster below Android 14); raising it drops them for nothing the
-# code uses. Going below 31 means migrating to LocationManagerCompat first.
+# minSdk is pinned at 34 by AltitudeResolver: android.location.altitude.
+# AltitudeConverter and Location.hasMslAltitude/getMslAltitudeMeters are API 34,
+# with no compat backport (the converter needs on-device geoid data that ships
+# only on Android 14+). Below 34 there is no MSL conversion at all, so the hero
+# number would be ellipsoid-only (off sea level by -100 m to +85 m) on those
+# devices. Lowering minSdk is therefore a product decision, not a free change;
+# lint (NewApi, warningsAsErrors) enforces the floor.
 compileSdk = "37"
-minSdk = "31"
+minSdk = "34"
 targetSdk = "37"
 
 [libraries]

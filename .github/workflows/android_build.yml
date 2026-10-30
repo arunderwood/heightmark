@@ -99,8 +99,8 @@ jobs:
         include:
           - device: pixel8proapi36
             api: 36
-          - device: pixel8proapi31
-            api: 31
+          - device: pixel8proapi35
+            api: 35
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
