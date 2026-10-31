@@ -2,7 +2,7 @@
 # Java and Kotlin bytecode level for every module. AGP's built-in Kotlin takes
 # its jvmTarget from targetCompatibility, so this one value sets both.
 jvmTarget = "17"
-agp = "9.4.1"
+agp = "9.5.0"
 coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"

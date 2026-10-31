@@ -36,13 +36,13 @@ internal object IdleWakePolicy {
         if (!anchor.hasAltitude() || !location.hasAltitude()) return false
         val accuracy = location.verticalAccuracyOrNull() ?: return false
         if (accuracy > MAX_FIX_VERTICAL_ACCURACY_M) return false
-        return abs(anchor.altitude - location.altitude) > MAX_IDLE_ALTITUDE_DRIFT_METERS
+        return abs(anchor.altitude - location.altitude) > MAX_IDLE_ALTITUDE_DRIFT_METERS + accuracy
     }
 
     /** Horizontal drift beyond this, past the fix's own accuracy radius, counts as movement. */
     const val MAX_IDLE_DRIFT_METERS = 30f
 
-    /** Altitude change beyond this counts as vertical movement. */
+    /** Altitude change beyond this, past the fix's own accuracy radius, counts as vertical movement. */
     const val MAX_IDLE_ALTITUDE_DRIFT_METERS = 10.0
 
     /** A horizontal accuracy worse than this (cell-tower fixes) can't reliably clear the drift threshold. */
