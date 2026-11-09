@@ -11,6 +11,7 @@
          targetSdk follows Play's yearly deadline. They stay in the report
          without blocking the build. -->
     <issue id="GradleDependency" severity="informational" />
+    <issue id="NewerVersionAvailable" severity="informational" />
     <issue id="AndroidGradlePluginVersion" severity="informational" />
     <issue id="OldTargetApi" severity="informational" />
 </lint>
