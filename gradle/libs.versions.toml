@@ -25,7 +25,7 @@ accessibilityTestFramework = "4.1.1"
 composeBom = "2026.09.00"
 # Macrobenchmark and the Baseline Profile Gradle plugin release together.
 benchmark = "1.5.0"
-uiautomator = "2.4.0"
+uiautomator = "2.4.1"
 profileinstaller = "1.4.1"
 # The project's Kotlin version. The Compose compiler plugin below puts
 # kotlin-gradle-plugin at this version on the build classpath, which overrides
