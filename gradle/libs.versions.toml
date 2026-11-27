@@ -22,7 +22,7 @@ ksp = "2.3.14"
 mockk = "1.14.12"
 coreSplashscreen = "1.2.0"
 accessibilityTestFramework = "4.1.1"
-composeBom = "2026.09.00"
+composeBom = "2026.11.01"
 # Macrobenchmark and the Baseline Profile Gradle plugin release together.
 benchmark = "1.5.0"
 uiautomator = "2.4.1"
