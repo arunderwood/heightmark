@@ -8,7 +8,11 @@ val PROFILE_DEVICE = "pixel8proapi36profile"
 
 android {
     namespace = "com.bizzarosn.heightmark.baselineprofile"
-    compileSdk = libs.versions.compileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.compileSdk.get().toInt()) {
+            minorApiLevel = libs.versions.compileSdkMinor.get().toInt()
+        }
+    }
 
     defaultConfig {
         minSdk = libs.versions.minSdk.get().toInt()
