@@ -22,7 +22,7 @@ ksp = "2.3.14"
 mockk = "1.14.12"
 coreSplashscreen = "1.2.0"
 accessibilityTestFramework = "4.1.1"
-composeBom = "2026.09.00"
+composeBom = "2026.11.01"
 # Macrobenchmark and the Baseline Profile Gradle plugin release together.
 benchmark = "1.5.0"
 uiautomator = "2.4.1"
@@ -34,7 +34,11 @@ profileinstaller = "1.4.1"
 kotlin = "2.4.21"
 # Android SDK levels for every module. Plain integers, not dependencies, so
 # Dependabot leaves them alone. targetSdk follows Play's yearly deadline.
+# compileSdkMinor is the platform's minor API level (37.1 is compileSdk 37,
+# minor 1). AndroidX libraries can require one, and checkAarMetadata fails the
+# build when the app compiles against an older minor level.
 compileSdk = "37"
+compileSdkMinor = "1"
 minSdk = "34"
 targetSdk = "37"
 
